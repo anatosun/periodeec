@@ -17,12 +17,14 @@ export INTERVAL=<interval to run the script in seconds>
 ```
 
 ## Docker
+
 Download the compose file, fill in the variables and execute `docker-compose up -d`.
+
 ```
 version: '3.2'
 services:
   periodeec:
-    image: wichtf/periodeec:latest
+    image: ghcr.io/anatosun/periodeec:latest
     container_name: periodeec
     environment:
     - DEEMIX_URL=<http://your_deemix_url:6595>
@@ -33,4 +35,3 @@ services:
     - SPOTIFY_CLIENT_SECRET=<spotify client secret>
     - INTERVAL=<interval to run the script in seconds>
 ```
-
