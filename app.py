@@ -13,6 +13,7 @@ class Environment:
     deemix_url: str
     deezer_email: str
     deezer_password: str
+    deezer_arl: str
     spotify_client_id: str
     spotify_client_secret: str
     spotify_usernames: str
@@ -24,6 +25,7 @@ env = Environment(
     deemix_url=os.getenv("DEEMIX_URL"),
     deezer_email=os.getenv("DEEZER_EMAIL"),
     deezer_password=os.getenv("DEEZER_PASSWORD"),
+    deezer_arl=os.getenv("DEEZER_ARL"),
     spotify_client_id=os.getenv("SPOTIFY_CLIENT_ID"),
     spotify_client_secret=os.getenv("SPOTIFY_CLIENT_SECRET"),
     spotify_usernames=os.getenv("SPOTIFY_USERNAMES"),
@@ -40,7 +42,10 @@ def login():
             "password": env.deezer_password,
         },
     )
-    arl = response.json()["arl"]
+    if response.json().get("arl") is not None:
+        arl = response.json()["arl"]
+    else:
+        arl = env.deezer_arl
     response = s.post(f"{env.deemix_url}/api/loginArl", json={"arl": arl})
     print(f"loging user {env.deezer_email}: {response.text}")
 
