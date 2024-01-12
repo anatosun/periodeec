@@ -1,12 +1,14 @@
 # Periodeec
 
-This is a simple script to peridocally send your Spotify playlists to Deemix.
+This is a simple script to periodically send your Spotify playlists to Deemix.
 
 ## Usage
 
 To use the script, simply fill the `.env` and execute `python3 app.py`.
 
 ```
+export EXECUTION_MODE=<albums|playlists|tracks>
+export CONFIG_PATH=</config>
 export DEEMIX_URL=<http://your_deemix_url:6595>
 export DEEZER_EMAIL=<deezer email>
 export DEEZER_PASSWORD=<deezer password>
@@ -27,7 +29,8 @@ services:
     image: ghcr.io/anatosun/periodeec:latest
     container_name: periodeec
     environment:
-    - DEEMIX_URL=<http://your_deemix_url:6595>
+    - EXECUTION_MODE=<albums>
+    - CONFIG_PATH=</config>
     - DEEZER_EMAIL=<deezer email>
     - DEEZER_PASSWORD=<deezer password>
     - SPOTIFY_USERNAMES=<a list of spotify username from which you want to download playlists>
