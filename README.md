@@ -29,12 +29,14 @@ services:
     image: ghcr.io/anatosun/periodeec:latest
     container_name: periodeec
     environment:
-    - EXECUTION_MODE=<albums>
-    - CONFIG_PATH=</config>
-    - DEEZER_EMAIL=<deezer email>
-    - DEEZER_PASSWORD=<deezer password>
-    - SPOTIFY_USERNAMES=<a list of spotify username from which you want to download playlists>
-    - SPOTIFY_CLIENT_ID=<spotify client id>
-    - SPOTIFY_CLIENT_SECRET=<spotify client secret>
-    - INTERVAL=<interval to run the script in seconds>
+        - EXECUTION_MODE=<albums>
+        - CONFIG_PATH=</config>
+        - DEEZER_EMAIL=<deezer email>
+        - DEEZER_PASSWORD=<deezer password>
+        - SPOTIFY_USERNAMES=<a list of spotify username from which you want to download playlists>
+        - SPOTIFY_CLIENT_ID=<spotify client id>
+        - SPOTIFY_CLIENT_SECRET=<spotify client secret>
+        - INTERVAL=<interval to run the script in seconds>
+    volumes:
+        /config:/config # proper volume binding to make cache persistent
 ```
