@@ -112,6 +112,12 @@ def download() -> None:
                         track_link = track["track"]["external_urls"]["spotify"]
                         track_id = track["track"]["id"]
                         track_path = f"{env.config_path}/cache/tracks/{track_id}.json"
+
+                        if not os.path.exists(f"{env.config_path}/cache/tracks"):
+                            os.makedirs(f"{env.config_path}/cache/tracks")
+                        if not os.path.exists(f"{env.config_path}/cache/albums"):
+                            os.makedirs(f"{env.config_path}/cache/albums")
+
                         if env.mode == "tracks":
 
                             if os.path.exists(track_path):
