@@ -7,6 +7,7 @@ import spotipy
 import json
 
 s = requests.Session()
+logging.basicConfig(level=logging.INFO)
 
 
 @dataclass
@@ -52,7 +53,8 @@ def login():
     else:
         arl = env.deezer_arl
     response = s.post(f"{env.deemix_url}/api/loginArl", json={"arl": arl})
-    print(f"loging user {env.deezer_email}: {response.text}")
+    logging.info(
+        f"loging user {env.deezer_email}: {response.json()['status']==1}")
 
 
 def enqueue(url: str) -> bool:
@@ -91,12 +93,12 @@ def download() -> None:
                 with open(playlist_path, "r") as f:
                     data = json.load(f)
                     if data["snapshot_id"] == snapshot_id:
-                        print(
+                        logging.info(
                             f"skipping {playlist_name}: already downloaded and no changes detected")
                         continue
 
             if env.mode == "playlists":
-                print(f"queuing {playlist_name}")
+                logging.info(f"queuing {playlist_name}")
                 enqueue(playlist_link)
                 time.sleep(1)
             else:
@@ -124,10 +126,10 @@ def download() -> None:
                                 with open(track_path) as f:
                                     data = json.load(f)
                                     if data["track"]["id"] == track_id:
-                                        print(
+                                        logging.info(
                                             f"skipping {track_name}: already downloaded")
                                         continue
-                            print(
+                            logging.info(
                                 f"queuing {track_name} from {playlist_name} offset {i}")
                             success = enqueue(track_link)
                             if success:
@@ -144,10 +146,10 @@ def download() -> None:
                                 with open(album_path) as f:
                                     data = json.load(f)
                                     if data["id"] == album_id:
-                                        print(
+                                        logging.info(
                                             f"skipping {album_name}: already downloaded")
                                         continue
-                            print(
+                            logging.info(
                                 f"queuing {album_name} from {playlist_name} offset {i}")
                             album = sp.album(album_link)
                             success = enqueue(album_link)
@@ -165,7 +167,7 @@ def download() -> None:
 
 def clear_queue():
     response = s.post(f"{env.deemix_url}/api/removeFinishedDownloads")
-    print(f"clearing queue: {response.text}")
+    logging.info(f"clearing queue: {response.text}")
 
 
 def main():
@@ -174,7 +176,7 @@ def main():
         clear_queue()
         download()
         time.sleep(env.interval)
-        print(f"sleeping for {env.interval} seconds")
+        logging.info(f"sleeping for {env.interval} seconds")
 
 
 if __name__ == "__main__":
