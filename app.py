@@ -40,21 +40,26 @@ env = Environment(
 
 
 def login():
-    response = s.post(
-        f"{env.deemix_url}/api/loginEmail",
-        json={
-            "accessToken": "",
-            "email": env.deezer_email,
-            "password": env.deezer_password,
-        },
-    )
-    if response.json().get("arl") is not None:
-        arl = response.json()["arl"]
-    else:
-        arl = env.deezer_arl
-    response = s.post(f"{env.deemix_url}/api/loginArl", json={"arl": arl})
-    logging.info(
-        f"loging user {env.deezer_email}: {response.json()['status']==1}")
+    try:
+        response = s.post(
+            f"{env.deemix_url}/api/loginEmail",
+            json={
+                "accessToken": "",
+                "email": env.deezer_email,
+                "password": env.deezer_password,
+            },
+        )
+        if response.json().get("arl") is not None:
+            arl = response.json()["arl"]
+        else:
+            arl = env.deezer_arl
+        response = s.post(f"{env.deemix_url}/api/loginArl", json={"arl": arl})
+        logging.info(
+            f"loging user {env.deezer_email}: {response.json()['status']==1}")
+        return response.json()["status"] == 1
+    except Exception as e:
+        logging.error(e)
+        return False
 
 
 def enqueue(url: str) -> bool:
@@ -171,7 +176,11 @@ def clear_queue():
 
 
 def main():
-    login()
+    while not login():
+        wait = 60
+        logging.error(f"could not login, retrying in {wait} seconds")
+        time.sleep(wait)
+
     while True:
         clear_queue()
         download()
