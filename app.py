@@ -116,6 +116,10 @@ def download() -> None:
                         playlist_link, limit=100, offset=i)
                     for track in playlist_tracks["items"]:
                         track_name = track["track"]["name"]
+                        if track["track"]["external_urls"].get("spotify") is None:
+                            logging.error(
+                                f"skipping track {track_name}: missing Spotify link")
+                            continue
                         track_link = track["track"]["external_urls"]["spotify"]
                         track_id = track["track"]["id"]
                         track_path = f"{env.config_path}/cache/tracks/{track_id}.json"
