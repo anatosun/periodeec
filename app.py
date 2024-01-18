@@ -188,8 +188,8 @@ def main():
     while True:
         clear_queue()
         download()
-        time.sleep(env.interval)
         logging.info(f"sleeping for {env.interval} seconds")
+        time.sleep(env.interval)
 
 
 if __name__ == "__main__":
