@@ -23,6 +23,13 @@ jobs:
           username: ${{github.actor}}
           password: ${{secrets.GITHUB_TOKEN}}
 
+      - name: "Build amd64 Periodeec Image"
+        run: |
+          docker buildx build --platform linux/amd64 -t ghcr.io/${{github.actor}}/periodeec:develop-amd64 --load .
+          docker push ghcr.io/${{github.actor}}/periodeec:develop-amd64
+          docker buildx build --platform linux/amd64 -t ghcr.io/${{github.actor}}/periodeec:develop --load .
+          docker push ghcr.io/${{github.actor}}/periodeec:develop
+
       - name: "Build arm64v8 Periodeec Image"
         run: |
           docker buildx create --use
@@ -33,10 +40,3 @@ jobs:
         run: |
           docker buildx build --platform linux/arm/v7 -t ghcr.io/${{github.actor}}/periodeec:arm32v7 --load .
           docker push ghcr.io/${{github.actor}}/periodeec:arm32v7
-
-      - name: "Build amd64 Periodeec Image"
-        run: |
-          docker buildx build --platform linux/amd64 -t ghcr.io/${{github.actor}}/periodeec:develop-amd64 --load .
-          docker push ghcr.io/${{github.actor}}/periodeec:develop-amd64
-          docker buildx build --platform linux/amd64 -t ghcr.io/${{github.actor}}/periodeec:develop --load .
-          docker push ghcr.io/${{github.actor}}/periodeec:develop
