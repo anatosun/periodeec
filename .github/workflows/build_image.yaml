@@ -3,7 +3,7 @@ name: Deploy Images to GHCR
 on:
   push:
     branches:
-      - main
+      - develop
   workflow_dispatch:
 
 jobs:
@@ -36,7 +36,7 @@ jobs:
 
       - name: "Build amd64 Periodeec Image"
         run: |
-          docker buildx build --platform linux/amd64 -t ghcr.io/${{github.actor}}/periodeec:amd64 --load .
-          docker push ghcr.io/${{github.actor}}/periodeec:amd64
-          docker buildx build --platform linux/amd64 -t ghcr.io/${{github.actor}}/periodeec:latest --load .
-          docker push ghcr.io/${{github.actor}}/periodeec:latest
+          docker buildx build --platform linux/amd64 -t ghcr.io/${{github.actor}}/periodeec:develop-amd64 --load .
+          docker push ghcr.io/${{github.actor}}/periodeec:develop-amd64
+          docker buildx build --platform linux/amd64 -t ghcr.io/${{github.actor}}/periodeec:develop-latest --load .
+          docker push ghcr.io/${{github.actor}}/periodeec:develop
