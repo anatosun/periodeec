@@ -1,2 +1,6 @@
-spotipy>=2.18.0
-async-timeout>=4.0.3
+spotipy
+async-timeout
+beets
+beets-extrafiles
+tidal-dl
+deemix
