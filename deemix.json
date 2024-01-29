@@ -8,7 +8,7 @@
   "createArtistFolder": true,
   "artistNameTemplate": "%artist%",
   "createAlbumFolder": true,
-  "albumNameTemplate": "%album%",
+  "albumNameTemplate": "%upc%",
   "createCDFolder": false,
   "createStructurePlaylist": true,
   "createSingleFolder": true,
