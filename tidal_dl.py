@@ -6,6 +6,30 @@ import requests
 import base64
 import datetime
 
+config = """
+{
+  "albumFolderFormat": "{AlbumID}",
+  "apiKeyIndex": 4,
+  "audioQuality": "HiFi",
+  "checkExist": true,
+  "downloadDelay": true,
+  "downloadPath": "downloads",
+  "includeEP": true,
+  "language": "0",
+  "lyricFile": true,
+  "multiThread": true,
+  "playlistFolderFormat": "Playlist/{PlaylistName} [{PlaylistUUID}]",
+  "saveAlbumInfo": true,
+  "saveCovers": true,
+  "showProgress": true,
+  "showTrackInfo": true,
+  "trackFileFormat": "{TrackNumber}-{TrackTitle}",
+  "usePlaylistFolder": false,
+  "videoFileFormat": "{VideoNumber} - {ArtistName} - {VideoTitle}{ExplicitFlag}",
+  "videoQuality": "P1080"
+}
+"""
+
 
 class Tidal:
     def __init__(self, client_id: str, client_secret: str, tidal_dl="/usr/bin/tidal-dl"):
@@ -17,20 +41,27 @@ class Tidal:
         self.tidal_dl = tidal_dl
         self.expiration = datetime.datetime.now(
         )+datetime.timedelta(seconds=int(self.expires_in))
+
+        token_filename = ".tidal-dl.token.json"
         self.token_path = os.path.join(
-            self.__get_token_path(), )
+            self.__get_token_path(), token_filename)
 
         if not os.path.exists(self.token_path):
             subprocess.run([f"{self.tidal_dl}"])
+        self.config_file_path = os.path.join(
+            self.__get_token_path(), ".tidal-dl.json")
+
+        if not os.path.exists(self.token_path):
+            with open(self.config_file_path, 'w', encoding="utf-8") as f:
+                f.write(config)
 
     def __get_token_path(self):
-        token_filename = ".tidal-dl.token.json"
         if "XDG_CONFIG_HOME" in os.environ:
-            return os.path.join(os.environ["XDG_CONFIG_HOME"], token_filename)
+            return os.path.join(os.environ["XDG_CONFIG_HOME"])
         elif "HOME" in os.environ:
-            return os.path.join(os.environ["HOME"], token_filename)
+            return os.path.join(os.environ["HOME"])
         else:
-            return os.path.join(os.path.abspath("./"), token_filename)
+            return os.path.join(os.path.abspath("./"))
 
     def login(self, token_url="https://auth.tidal.com/v1/oauth2/token") -> None:
 
