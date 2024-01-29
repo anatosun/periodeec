@@ -100,7 +100,7 @@ class Deemix:
             f.write(arl)
 
         config_path = self.__get_config_path()
-        if os.path.exists(config_path):
+        if not os.path.exists(config_path):
             os.makedirs(config_path)
 
         config_file_path = os.path.join(config_path, "config.json")
