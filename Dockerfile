@@ -11,5 +11,18 @@ RUN mkdir -p $WORKDIR
 RUN mkdir -p $CONFIG
 WORKDIR $WORKDIR
 COPY . $WORKDIR
+
+
+
+ARG UNAME=abc
+ARG PUID=1000
+ARG PGID=1000
+RUN groupadd -g $PGID -o $UNAME
+RUN useradd -m -u $PUID -g $PGID -o -s /bin/bash $UNAME
+RUN chown -R $PUID:$PGID $WORKDIR
+RUN chown -R $PUID:$PGID $CONFIG
+
+USER $UNAME
+
 RUN pip install -r requirements.txt
 CMD python3 "app.py"
