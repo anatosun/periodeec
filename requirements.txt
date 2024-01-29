@@ -1,6 +1,6 @@
 spotipy
 async-timeout
 beets
-beets-extrafiles
+beets-filetote
 tidal-dl
 deemix
