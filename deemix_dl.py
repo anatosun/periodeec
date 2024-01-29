@@ -98,9 +98,14 @@ class Deemix:
         arl_path = os.path.join(self.__get_config_path(), ".arl")
         with open(arl_path, 'w', encoding="utf-8") as f:
             f.write(arl)
-        config_path = os.path.join(self.__get_config_path(), "config.json")
-        if not os.path.exists(config_path):
-            with open(config_path, 'w', encoding="utf-8") as f:
+
+        config_path = self.__get_config_path()
+        if os.path.exists(config_path):
+            os.makedirs(config_path)
+
+        config_file_path = os.path.join(config_path, "config.json")
+        if not os.path.exists(config_file_path):
+            with open(config_file_path, 'w', encoding="utf-8") as f:
                 f.write(config)
 
     def __get_config_path(self) -> str:
