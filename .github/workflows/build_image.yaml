@@ -38,5 +38,5 @@ jobs:
         run: |
           docker buildx build --platform linux/amd64 -t ghcr.io/${{github.actor}}/periodeec:develop-amd64 --load .
           docker push ghcr.io/${{github.actor}}/periodeec:develop-amd64
-          docker buildx build --platform linux/amd64 -t ghcr.io/${{github.actor}}/periodeec:develop-latest --load .
+          docker buildx build --platform linux/amd64 -t ghcr.io/${{github.actor}}/periodeec:develop --load .
           docker push ghcr.io/${{github.actor}}/periodeec:develop
