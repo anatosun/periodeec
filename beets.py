@@ -4,10 +4,10 @@ import os
 
 class Beets():
 
-    def __init__(self, libary_path="/music", beet="/usr/bin/beet"):
+    def __init__(self, library_path="/music", beet="/usr/bin/beet"):
         config = f"""
         plugins: spotify copyartifacts
-        directory: {libary_path}
+        directory: {library_path}
         library: /beets/library.db
         import:
           move: yes
