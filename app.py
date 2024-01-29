@@ -12,6 +12,7 @@ import beets
 
 @dataclass
 class Environment:
+    library_path: str
     downloaders: str
     deemix_path: str
     tidal_dl_path: str
@@ -30,6 +31,7 @@ class Environment:
 
 # Read ENV variables
 env = Environment(
+    library_path=os.getenv("PERIODEEC_LIBRARY_PATH", "/music"),
     downloaders=os.getenv("PERIODEEC_DOWNLOADERS", "deemix"),
     deemix_path=os.getenv("DEEMIX_PATH", "/usr/bin/deemix"),
     tidal_dl_path=os.getenv("TIDAL_DL_PATH", "/usr/bin/tidal-dl"),
@@ -49,8 +51,9 @@ env = Environment(
 s = requests.Session()
 logging.basicConfig(level=logging.INFO)
 deemix = deemix_dl.Deemix(env.deezer_arl, env.deemix_path)
-tidal = tidal_dl.Tidal(env.tidal_client_id, env.tidal_client_secret)
-beets = beets.Beets(beet=env.beets_path)
+tidal = tidal_dl.Tidal(env.tidal_client_id,
+                       env.tidal_client_secret, tidal_dl=env.tidal_dl_path)
+beets = beets.Beets(library_path=env.library_path, beet=env.beets_path)
 not_found_file = os.path.join(env.config_path, "not_found.txt")
 not_found = set()
 
