@@ -2,7 +2,6 @@ from dataclasses import dataclass
 import logging
 import os
 import time
-import requests
 import spotipy
 import json
 import deemix_dl
@@ -48,7 +47,6 @@ env = Environment(
     interval=int(os.getenv("INTERVAL", "")),
 )
 
-s = requests.Session()
 logging.basicConfig(level=logging.INFO)
 deemix = deemix_dl.Deemix(env.deezer_arl, env.deemix_path)
 tidal = tidal_dl.Tidal(env.tidal_client_id,
@@ -189,7 +187,7 @@ def download(sp: spotipy.Spotify) -> None:
 def main():
 
     ccm = spotipy.SpotifyClientCredentials(
-        env.spotify_client_id, env.spotify_client_secret
+        env.spotify_client_id, env.spotify_client_secret,
     )
     sp = spotipy.Spotify(client_credentials_manager=ccm)
     while True:
