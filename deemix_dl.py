@@ -123,7 +123,7 @@ class Deemix:
             [f"{self.deemix}", "--path", f"{path}", f"{link}"], stdout=subprocess.PIPE)
 
         if result.returncode == 1:
-            return False, path, "tidal-dl exited with code 1"
+            return False, path, result.stdout.decode("utf-8")[:-2]
 
         if "DataException" in result.stdout.decode("utf-8"):
             return False, path, result.stdout.decode("utf-8")[:-2]
