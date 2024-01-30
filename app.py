@@ -104,7 +104,13 @@ def download(sp: spotipy.Spotify) -> None:
                 for track in playlist_tracks["items"]:
 
                     track_name = track["track"]["name"]
-                    isrc = track["track"]["external_ids"]["isrc"]
+                    isrc = track["track"]["external_ids"].get("isrc")
+
+                    if isrc is None:
+                        logging.error(
+                            f"skipping {track_name}: isrc not found")
+                        continue
+
                     exists, path = beets.exists(isrc)
 
                     if exists:
