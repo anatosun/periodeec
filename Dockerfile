@@ -24,7 +24,8 @@ RUN chown -R $PUID:$PGID $CONFIG
 
 USER $UNAME
 
-RUN python3 -m venv .venv
-RUN . .venv/bin/activate
-RUN pip3 install -r requirements.txt
-CMD python3 "app.py"
+RUN python -m venv .venv
+ENV PATH="${WORKDIR}/.env/bin:$PATH"
+ENV PATH="${CONFIG}/local/bin:$PATH"
+RUN pip install -r requirements.txt
+CMD python "app.py"
