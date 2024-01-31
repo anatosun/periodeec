@@ -61,6 +61,8 @@ def download(sp: spotipy.Spotify) -> None:
     usernames = env.spotify_usernames.split(",")
     for username in usernames:
 
+        logging.info(f"current user is {username}")
+
         try:
             sleep = random.uniform(1, 5)
             time.sleep(sleep)
@@ -78,6 +80,7 @@ def download(sp: spotipy.Spotify) -> None:
             owner = playlist["owner"]["id"]
             snapshot_id = playlist["snapshot_id"]
             number_of_tracks = playlist["tracks"]["total"]
+            logging.info(f"current playlist is {playlist_name}")
 
             if not os.path.exists(f"{env.config_path}/cache/playlists/{owner}"):
                 os.makedirs(f"{env.config_path}/cache/playlists/{owner}")
@@ -100,10 +103,16 @@ def download(sp: spotipy.Spotify) -> None:
                     sleep = random.uniform(1, 3)
                     time.sleep(sleep)
                     playlist_tracks = sp.playlist_tracks(
-                        playlist_link, limit=100, offset=i)
+                        playlist_link, limit=100, offset=i, fields="items(id,track(name,external_ids.isrc,href,album(name,id,href,external_urls.spotify,external_ids.upc)))")
                 except Exception as e:
                     logging.error(f"skipping playlist {playlist_name}: {e}")
                     continue
+
+                # with open("./playlist.json", "w") as f:
+                #     json.dump(playlist_tracks, f)
+                # exit()
+
+                album_ids = set()
 
                 for track in playlist_tracks["items"]:
 
@@ -114,6 +123,9 @@ def download(sp: spotipy.Spotify) -> None:
                         logging.error(
                             f"skipping {track_name}: isrc not found")
                         continue
+
+                    with open("./track.json", "w") as f:
+                        json.dump(track, f)
 
                     exists, path = beets.exists(isrc)
 
@@ -127,67 +139,80 @@ def download(sp: spotipy.Spotify) -> None:
                     album_link = album["external_urls"]["spotify"]
                     album_id = album["id"]
 
+                    album_ids.add(album_id)
+
+                    if len(album_ids) < 20:
+                        continue
+
+                    albums = []
+
                     try:
-                        sleep = random.uniform(1, 3)
-                        time.sleep(sleep)
-                        album = sp.album(album_link)
+                        albums = sp.albums(album_ids)["albums"]
                     except Exception as e:
-                        logging.error(f"skipping track {track_name}: {e}")
+                        logging.error(f"skipping albums {album_ids}: {e}")
                         continue
 
-                    upc = album["external_ids"].get("upc")
-
-                    if upc in not_found:
-                        logging.info(
-                            f"skipping track {track_name}: album upc previously not found")
+                    if len(albums) < 1:
+                        logging.error(f"failed to fetch albums ids")
                         continue
 
-                    if upc is None:
-                        logging.error(
-                            f"skipping track {track_name}: album upc not found")
-                        continue
+                    for album in albums:
 
-                    success = False
-                    err = ""
-                    if "deemix" in env.downloaders:
-                        logging.info(
-                            f"queuing {album_name} in Deemix")
-                        success, path, err = deemix.enqueue(
-                            upc, env.download_path)
+                        upc = album["external_ids"].get("upc")
 
-                    if not success:
-                        logging.error(
-                            f"failed to download album {album_name}: {err}")
+                        if upc in not_found:
+                            logging.info(
+                                f"skipping track {track_name}: album upc previously not found")
+                            continue
 
-                    if not success and "tidal" in env.downloaders:
-                        logging.info(
-                            f"queuing {album_name} in Tidal")
-                        success, path, err = tidal.enqueue(
-                            upc, env.download_path)
+                        if upc is None:
+                            logging.error(
+                                f"skipping track {track_name}: album upc not found")
+                            continue
 
-                    if not success:
-                        logging.error(
-                            f"failed to download album {album_name}: {err}")
-                        not_found.add(upc)
-                        continue
+                        success = False
+                        err = ""
+                        if "deemix" in env.downloaders:
+                            logging.info(
+                                f"queuing {album_name} in Deemix")
+                            success, path, err = deemix.enqueue(
+                                upc, env.download_path)
 
-                    if not os.path.exists(path):
-                        logging.error(
-                            f"failed to download album {album_name}: directory {path} doesn't exist")
-                        not_found.add(upc)
-                        continue
+                        if not success:
+                            logging.error(
+                                f"failed to download album {album_name}: {err}")
 
-                    with open(os.path.join(path, "spotify.json"), "w") as f:
-                        json.dump(album, f)
+                        if not success and "tidal" in env.downloaders:
+                            logging.info(
+                                f"queuing {album_name} in Tidal")
+                            success, path, err = tidal.enqueue(
+                                upc, env.download_path)
 
-                    success = beets.add(path=path, search_id=album_id)
+                        if not success:
+                            logging.error(
+                                f"failed to download album {album_name}: {err}")
+                            not_found.add(upc)
+                            continue
 
-                    if success:
-                        logging.info(
-                            f"added {album_name} to beets library")
-                    else:
-                        logging.error(
-                            f"failed to add {album_name} to beets library")
+                        if not os.path.exists(path):
+                            logging.error(
+                                f"failed to download album {album_name}: directory {path} doesn't exist")
+                            not_found.add(upc)
+                            continue
+
+                        with open(os.path.join(path, "spotify.json"), "w") as f:
+                            json.dump(album, f)
+
+                        success = beets.add(path=path, search_id=album_id)
+
+                        if success:
+                            logging.info(
+                                f"added {album_name} to beets library")
+                        else:
+                            logging.error(
+                                f"failed to add {album_name} to beets library")
+
+                    album_ids = set()
 
             with open(playlist_path, "w") as f:
                 json.dump(playlist, f)
@@ -199,7 +224,8 @@ def main():
         ccm = spotipy.SpotifyClientCredentials(
             env.spotify_client_id, env.spotify_client_secret,
         )
-        sp = spotipy.Spotify(client_credentials_manager=ccm)
+        sp = spotipy.Spotify(
+            client_credentials_manager=ccm)
         not_found = set(line.strip() for line in open(not_found_file))
         download(sp)
         with open(not_found_file, "w") as f:
