@@ -182,7 +182,7 @@ def download(sp: spotipy.Spotify) -> None:
                     else:
                         logging.error(
                             f"failed to add {album_name} to beets library")
-                        not_found.add(upc)
+                        time.sleep(5)
 
                     time.sleep(1)
 
@@ -192,11 +192,11 @@ def download(sp: spotipy.Spotify) -> None:
 
 def main():
 
-    ccm = spotipy.SpotifyClientCredentials(
-        env.spotify_client_id, env.spotify_client_secret,
-    )
-    sp = spotipy.Spotify(client_credentials_manager=ccm)
     while True:
+        ccm = spotipy.SpotifyClientCredentials(
+            env.spotify_client_id, env.spotify_client_secret,
+        )
+        sp = spotipy.Spotify(client_credentials_manager=ccm)
         not_found = set(line.strip() for line in open(not_found_file))
         download(sp)
         with open(not_found_file, "w") as f:
