@@ -92,18 +92,20 @@ class Tidal:
                    "Authorization": f"Bearer {self.access_token}", "Content-Type": "application/vnd.tidal.v1+json"}
         response = self.session.get(
             f"{api_url}/albums/byBarcodeId?barcodeId={upc}&countryCode={countryCode}",  headers=headers)
+        try:
+            errors = response.json().get("errors")
 
-        errors = response.json().get("errors")
+            if errors is not None:
+                for error in errors:
+                    if error["detail"] == "Please refresh your token":
+                        self.login()
+                        break
 
-        if errors is not None:
-            for error in errors:
-                if error["detail"] == "Please refresh your token":
-                    self.login()
-                    break
+            albums = response.json().get("data")
 
-        albums = response.json().get("data")
-
-        if albums is None or len(albums) < 1:
+            if albums is None or len(albums) < 1:
+                return ""
+        except:
             return ""
 
         return albums[0].get("id")
