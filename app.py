@@ -135,8 +135,6 @@ def download(sp: spotipy.Spotify) -> None:
                         continue
 
                     album = track["track"]["album"]
-                    album_name = album["name"]
-                    album_link = album["external_urls"]["spotify"]
                     album_id = album["id"]
 
                     album_ids.add(album_id)
@@ -156,18 +154,22 @@ def download(sp: spotipy.Spotify) -> None:
                         logging.error(f"failed to fetch albums ids")
                         continue
 
+                    album_ids = set()
                     for album in albums:
+
+                        album_name = album["name"]
+                        logging.info(f"current album is {album['name']}")
 
                         upc = album["external_ids"].get("upc")
 
                         if upc in not_found:
                             logging.info(
-                                f"skipping track {track_name}: album upc previously not found")
+                                f"skipping album {album_name}: upc previously not found")
                             continue
 
                         if upc is None:
                             logging.error(
-                                f"skipping track {track_name}: album upc not found")
+                                f"skipping album {album_name}: upc not found")
                             continue
 
                         success = False
@@ -211,8 +213,6 @@ def download(sp: spotipy.Spotify) -> None:
                         else:
                             logging.error(
                                 f"failed to add {album_name} to beets library")
-
-                    album_ids = set()
 
             with open(playlist_path, "w") as f:
                 json.dump(playlist, f)
