@@ -155,6 +155,7 @@ def download(sp: spotipy.Spotify) -> None:
                     for album in albums:
 
                         album_name = album["name"]
+                        album_id = album["external_urls"]["spotify"]
 
                         upc = album["external_ids"].get("upc")
 
