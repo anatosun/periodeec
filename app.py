@@ -205,6 +205,7 @@ def download(sp: spotipy.Spotify) -> None:
                         with open(os.path.join(path, "spotify.json"), "w") as f:
                             json.dump(album, f)
 
+                        time.sleep(random.uniform(0, 5))
                         success = beets.add(path=path, search_id=album_id)
 
                         if success:
