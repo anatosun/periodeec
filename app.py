@@ -2,6 +2,7 @@ from dataclasses import dataclass
 import logging
 import os
 import time
+import random
 import spotipy
 import json
 import deemix_dl
@@ -57,11 +58,13 @@ not_found = set()
 
 
 def download(sp: spotipy.Spotify) -> None:
-
     usernames = env.spotify_usernames.split(",")
     for username in usernames:
 
         try:
+            sleep = random.uniform(1, 5)
+            logging.info(f"sleeping for {sleep} to avoid rate limiting")
+            time.sleep(sleep)
             user_playlists = sp.user_playlists(username)
         except Exception as e:
             logging.error(f"skipping user {username}: {e}")
@@ -95,6 +98,10 @@ def download(sp: spotipy.Spotify) -> None:
             for i in range(k + r):
 
                 try:
+                    sleep = random.uniform(1, 3)
+                    logging.info(
+                        f"sleeping for {sleep} to avoid rate limiting")
+                    time.sleep(sleep)
                     playlist_tracks = sp.playlist_tracks(
                         playlist_link, limit=100, offset=i)
                 except Exception as e:
@@ -124,6 +131,10 @@ def download(sp: spotipy.Spotify) -> None:
                     album_id = album["id"]
 
                     try:
+                        sleep = random.uniform(1, 3)
+                        logging.info(
+                            f"sleeping for {sleep} to avoid rate limiting")
+                        time.sleep(sleep)
                         album = sp.album(album_link)
                     except Exception as e:
                         logging.error(f"skipping track {track_name}: {e}")
@@ -182,9 +193,6 @@ def download(sp: spotipy.Spotify) -> None:
                     else:
                         logging.error(
                             f"failed to add {album_name} to beets library")
-                        time.sleep(5)
-
-                    time.sleep(1)
 
             with open(playlist_path, "w") as f:
                 json.dump(playlist, f)
