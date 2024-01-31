@@ -202,14 +202,14 @@ def download(sp: spotipy.Spotify) -> None:
                             json.dump(album, f)
 
                         time.sleep(random.uniform(0, 5))
-                        success = beets.add(path=path, search_id=album_id)
+                        success, e = beets.add(path=path, search_id=album_id)
 
                         if success:
                             logging.info(
                                 f"added {album_name} to beets library")
                         else:
                             logging.error(
-                                f"failed to add {album_name} to beets library")
+                                f"failed to add {album_name} to beets library: {e}")
 
             with open(playlist_path, "w") as f:
                 json.dump(playlist, f)
