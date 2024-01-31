@@ -61,8 +61,6 @@ def download(sp: spotipy.Spotify) -> None:
     usernames = env.spotify_usernames.split(",")
     for username in usernames:
 
-        logging.info(f"current user is {username}")
-
         try:
             sleep = random.uniform(1, 5)
             time.sleep(sleep)
@@ -80,7 +78,6 @@ def download(sp: spotipy.Spotify) -> None:
             owner = playlist["owner"]["id"]
             snapshot_id = playlist["snapshot_id"]
             number_of_tracks = playlist["tracks"]["total"]
-            logging.info(f"current playlist is {playlist_name}")
 
             if not os.path.exists(f"{env.config_path}/cache/playlists/{owner}"):
                 os.makedirs(f"{env.config_path}/cache/playlists/{owner}")
@@ -158,7 +155,6 @@ def download(sp: spotipy.Spotify) -> None:
                     for album in albums:
 
                         album_name = album["name"]
-                        logging.info(f"current album is {album['name']}")
 
                         upc = album["external_ids"].get("upc")
 
