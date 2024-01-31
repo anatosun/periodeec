@@ -63,7 +63,6 @@ def download(sp: spotipy.Spotify) -> None:
 
         try:
             sleep = random.uniform(1, 5)
-            logging.info(f"sleeping for {sleep} to avoid rate limiting")
             time.sleep(sleep)
             user_playlists = sp.user_playlists(username)
         except Exception as e:
@@ -99,8 +98,6 @@ def download(sp: spotipy.Spotify) -> None:
 
                 try:
                     sleep = random.uniform(1, 3)
-                    logging.info(
-                        f"sleeping for {sleep} to avoid rate limiting")
                     time.sleep(sleep)
                     playlist_tracks = sp.playlist_tracks(
                         playlist_link, limit=100, offset=i)
@@ -132,8 +129,6 @@ def download(sp: spotipy.Spotify) -> None:
 
                     try:
                         sleep = random.uniform(1, 3)
-                        logging.info(
-                            f"sleeping for {sleep} to avoid rate limiting")
                         time.sleep(sleep)
                         album = sp.album(album_link)
                     except Exception as e:
