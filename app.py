@@ -217,7 +217,6 @@ def download(sp: spotipy.Spotify) -> None:
 
 def import_remaining():
 
-    logging.info(f"importing remaining folders in {env.download_path}")
     for remaining in os.listdir(env.download_path):
         remaining = os.path.join(env.download_path, remaining)
         data_path = os.path.join(remaining, "spotify.json")
