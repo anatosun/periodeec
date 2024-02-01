@@ -54,10 +54,9 @@ tidal = tidal_dl.Tidal(env.tidal_client_id,
                        env.tidal_client_secret, tidal_dl=env.tidal_dl_path)
 beets = beets.Beets(library_path=env.library_path, beet=env.beets_path)
 not_found_file = os.path.join(env.config_path, "not_found.txt")
-not_found = set()
 
 
-def download(sp: spotipy.Spotify) -> None:
+def download(sp: spotipy.Spotify, not_found: set, force=False) -> set:
     usernames = env.spotify_usernames.split(",")
     for username in usernames:
 
@@ -83,7 +82,7 @@ def download(sp: spotipy.Spotify) -> None:
                 os.makedirs(f"{env.config_path}/cache/playlists/{owner}")
 
             playlist_path = f"{env.config_path}/cache/playlists/{owner}/{playlist_name}.json"
-            if os.path.exists(playlist_path):
+            if os.path.exists(playlist_path) and not force:
                 with open(playlist_path, "r") as f:
                     data = json.load(f)
                     if data["snapshot_id"] == snapshot_id:
@@ -104,10 +103,6 @@ def download(sp: spotipy.Spotify) -> None:
                 except Exception as e:
                     logging.error(f"skipping playlist {playlist_name}: {e}")
                     continue
-
-                # with open("./playlist.json", "w") as f:
-                #     json.dump(playlist_tracks, f)
-                # exit()
 
                 album_ids = set()
 
@@ -214,6 +209,8 @@ def download(sp: spotipy.Spotify) -> None:
             with open(playlist_path, "w") as f:
                 json.dump(playlist, f)
 
+    return not_found
+
 
 def main():
 
@@ -222,8 +219,14 @@ def main():
             env.spotify_client_id, env.spotify_client_secret,
         )
         sp = spotipy.Spotify(client_credentials_manager=ccm)
+
+        if not os.path.exists(not_found_file):
+            os.mknod(not_found_file)
+
         not_found = set(line.strip() for line in open(not_found_file))
-        download(sp)
+        not_found = download(sp=sp, not_found=not_found)
+
+        logging.info(f"these upc values were not found: {not_found}")
         with open(not_found_file, "w") as f:
             for upc in not_found:
                 f.write(f"{upc}\n")
