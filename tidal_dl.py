@@ -121,6 +121,6 @@ class Tidal:
             return False, path, "tidal-dl exited with code 1"
 
         if "[ERR]" in result.stdout.decode("utf-8"):
-            return False, path, result.stdout.decode("utf-8")[:-2]
+            return False, path, "tidal-dl returned errors while downloading"
 
         return True, os.path.join(path, id), ""
