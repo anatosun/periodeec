@@ -1,3 +1,4 @@
+requests
 spotipy
 async-timeout
 beets
