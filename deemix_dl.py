@@ -122,10 +122,14 @@ class Deemix:
         result = subprocess.run(
             [f"{self.deemix}", "--path", f"{path}", f"{link}"], stdout=subprocess.PIPE)
 
-        if result.returncode == 1:
-            return False, path, result.stdout.decode("utf-8").replace("\n", " ")
+        try:
+            stdout = result.stdout.decode("utf-8")
+        except Exception as e:
+            return False, path, f"{e}"
 
-        if "DataException" in result.stdout.decode("utf-8"):
-            return False, path, result.stdout.decode("utf-8").replace("\n", " ")
+        if result.returncode == 1:
+            return False, path, stdout.replace("\n", " ")
+        if "DataException" in stdout:
+            return False, path, stdout.replace("\n", " ")
 
         return True, os.path.join(path, upc.lstrip("0")), ""
