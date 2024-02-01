@@ -109,7 +109,7 @@ class Deemix:
                 f.write(config)
 
     def __get_config_path(self) -> str:
-        config_folder = "deemix"
+        config_folder = ".config"
         if "XDG_CONFIG_HOME" in os.environ:
             return os.path.join(os.environ["XDG_CONFIG_HOME"], config_folder)
         elif "HOME" in os.environ:
@@ -118,7 +118,7 @@ class Deemix:
             return os.path.join(os.path.abspath("./"), config_folder)
 
     def enqueue(self, upc: str, path: str) -> tuple[bool, str, str]:
-        link = f"https://deezer/album/upc:{upc}"
+        link = f"https:///api.deezer.com/album/upc:{upc}"
         result = subprocess.run(
             [f"{self.deemix}", "--path", f"{path}", f"{link}"], stdout=subprocess.PIPE)
 
