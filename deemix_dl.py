@@ -109,7 +109,7 @@ class Deemix:
                 f.write(config)
 
     def __get_config_path(self) -> str:
-        config_folder = ".config"
+        config_folder = "deemix"
         if "XDG_CONFIG_HOME" in os.environ:
             return os.path.join(os.environ["XDG_CONFIG_HOME"], config_folder)
         elif "HOME" in os.environ:
