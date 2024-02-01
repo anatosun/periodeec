@@ -218,7 +218,9 @@ def download(sp: spotipy.Spotify) -> None:
 
 def import_remaining():
 
+    logging.info(f"importing remaining folders in {env.download_path}")
     for remaining in os.listdir(env.download_path):
+        remaining = os.path.join(env.download_path, remaining)
         data_path = os.path.join(remaining, "spotify.json")
         if not os.path.exists(data_path):
             continue
@@ -239,6 +241,7 @@ def import_remaining():
             album_name = album["name"]
 
             time.sleep(random.uniform(1, 5))
+            logging.info(f"importing {album_name}")
             success, e = beets.add(path=remaining, search_id=album_id)
 
             if success:
