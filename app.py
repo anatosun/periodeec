@@ -202,7 +202,7 @@ def download(sp: spotipy.Spotify) -> None:
                         with open(os.path.join(path, "spotify.json"), "w") as f:
                             json.dump(album, f)
 
-                        time.sleep(random.uniform(0, 5))
+                        time.sleep(random.uniform(1, 5))
                         success, e = beets.add(path=path, search_id=album_id)
 
                         if success:
@@ -216,9 +216,43 @@ def download(sp: spotipy.Spotify) -> None:
                 json.dump(playlist, f)
 
 
+def import_remaining():
+
+    for remaining in os.listdir(env.download_path):
+        data_path = os.path.join(remaining, "spotify.json")
+        if not os.path.exists(data_path):
+            continue
+
+        with open(data_path, "r") as f:
+
+            album = json.load(f)
+
+            external = album.get("external_ids")
+            if external is None:
+                continue
+
+            upc = external.get("upc")
+            if upc is None:
+                continue
+
+            album_id = album["external_urls"]["spotify"]
+            album_name = album["name"]
+
+            time.sleep(random.uniform(1, 5))
+            success, e = beets.add(path=remaining, search_id=album_id)
+
+            if success:
+                logging.info(
+                    f"added {album_name} to beets library")
+            else:
+                logging.error(
+                    f"failed to add {album_name} to beets library: {e}")
+
+
 def main():
 
     while True:
+        import_remaining()
         ccm = spotipy.SpotifyClientCredentials(
             env.spotify_client_id, env.spotify_client_secret,
         )
