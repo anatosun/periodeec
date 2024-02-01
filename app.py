@@ -202,7 +202,6 @@ def download(sp: spotipy.Spotify) -> None:
                         with open(os.path.join(path, "spotify.json"), "w") as f:
                             json.dump(album, f)
 
-                        time.sleep(random.uniform(1, 5))
                         success, e = beets.add(path=path, search_id=album_id)
 
                         if success:
@@ -240,7 +239,6 @@ def import_remaining():
             album_id = album["external_urls"]["spotify"]
             album_name = album["name"]
 
-            time.sleep(random.uniform(1, 5))
             logging.info(f"importing {album_name}")
             success, e = beets.add(path=remaining, search_id=album_id)
 
