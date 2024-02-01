@@ -215,49 +215,13 @@ def download(sp: spotipy.Spotify) -> None:
                 json.dump(playlist, f)
 
 
-def import_remaining():
-
-    for remaining in os.listdir(env.download_path):
-        remaining = os.path.join(env.download_path, remaining)
-        data_path = os.path.join(remaining, "spotify.json")
-        if not os.path.exists(data_path):
-            continue
-
-        with open(data_path, "r") as f:
-
-            album = json.load(f)
-
-            external = album.get("external_ids")
-            if external is None:
-                continue
-
-            upc = external.get("upc")
-            if upc is None:
-                continue
-
-            album_id = album["external_urls"]["spotify"]
-            album_name = album["name"]
-
-            logging.info(f"importing {album_name}")
-            success, e = beets.add(path=remaining, search_id=album_id)
-
-            if success:
-                logging.info(
-                    f"added {album_name} to beets library")
-            else:
-                logging.error(
-                    f"failed to add {album_name} to beets library: {e}")
-
-
 def main():
 
     while True:
-        import_remaining()
         ccm = spotipy.SpotifyClientCredentials(
             env.spotify_client_id, env.spotify_client_secret,
         )
-        sp = spotipy.Spotify(
-            client_credentials_manager=ccm)
+        sp = spotipy.Spotify(client_credentials_manager=ccm)
         not_found = set(line.strip() for line in open(not_found_file))
         download(sp)
         with open(not_found_file, "w") as f:
