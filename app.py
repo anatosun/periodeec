@@ -226,7 +226,7 @@ def main():
         not_found = set(line.strip() for line in open(not_found_file))
         not_found = download(sp=sp, not_found=not_found)
 
-        logging.info(f"these upc values were not found: {not_found}")
+        logging.debug(f"these upc values were not found: {not_found}")
         with open(not_found_file, "w") as f:
             for upc in not_found:
                 f.write(f"{upc}\n")
