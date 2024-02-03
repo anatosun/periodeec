@@ -1,4 +1,6 @@
 import os
+import logging
+import requests
 import subprocess
 
 config = """
@@ -95,6 +97,7 @@ class Deemix:
     def __init__(self, arl: str, deemix='/usr/bin/deemix'):
         self.arl = arl
         self.deemix = deemix
+        self.session = requests.Session()
         arl_path = os.path.join(self.__get_config_path(), ".arl")
         with open(arl_path, 'w', encoding="utf-8") as f:
             f.write(arl)
@@ -117,19 +120,44 @@ class Deemix:
         else:
             return os.path.join(os.path.abspath("./"), config_folder)
 
-    def enqueue(self, upc: str, path: str) -> tuple[bool, str, str]:
+    def enqueue(self, upc: str, path: str, isrc=None) -> tuple[bool, str, str]:
         link = f"https:///api.deezer.com/album/upc:{upc}"
+        success, error = self.__enqueue(link, path)
+
+        if not success and isrc is not None:
+            try:
+                response = self.session.get(
+                    f"https://api.deezer.com/2.0/track/isrc:{isrc}")
+                album = response.json().get("album")
+                if album is None:
+                    return success, path, "upc and isrc not found on Deezer"
+                link = album["link"]
+                id = album["id"]
+                response = self.session.get(
+                    f"https://api.deezer.com/2.0/album/{id}")
+                album = response.json()
+                upc = album["upc"]
+                return self.enqueue(upc, path, None)
+
+            except Exception as e:
+                return False, path, f"{e}"
+
+        return success, os.path.join(path, f"{upc}"), error
+
+    def __enqueue(self, link: str, path: str):
         result = subprocess.run(
             [f"{self.deemix}", "--path", f"{path}", f"{link}"], stdout=subprocess.PIPE)
-
+        error = ""
+        success = True
         try:
             stdout = result.stdout.decode("utf-8")
         except Exception as e:
-            return False, path, f"{e}"
+            return False, f"{e}"
 
         if result.returncode == 1:
-            return False, path, stdout.replace("\n", " ")
-        if "DataException" in stdout:
-            return False, path, stdout.replace("\n", " ")
+            return False, stdout.replace("\n", " ")
 
-        return True, os.path.join(path, upc.lstrip("0")), ""
+        if "DataException" in stdout:
+            return False, stdout.replace("\n", " ")
+
+        return success, error

@@ -105,6 +105,7 @@ def download(sp: spotipy.Spotify, not_found: set, force=False) -> set:
                     continue
 
                 album_ids = set()
+                isrcs = set()
 
                 for track in playlist_tracks["items"]:
 
@@ -130,6 +131,7 @@ def download(sp: spotipy.Spotify, not_found: set, force=False) -> set:
                     album_id = album["id"]
 
                     album_ids.add(album_id)
+                    isrcs.add(isrc)
 
                     if len(album_ids) < 20:
                         continue
@@ -146,8 +148,7 @@ def download(sp: spotipy.Spotify, not_found: set, force=False) -> set:
                         logging.error(f"failed to fetch albums ids")
                         continue
 
-                    album_ids = set()
-                    for album in albums:
+                    for album, isrc in zip(albums, isrcs):
 
                         album_name = album["name"]
                         album_id = album["external_urls"]["spotify"]
@@ -170,7 +171,7 @@ def download(sp: spotipy.Spotify, not_found: set, force=False) -> set:
                             logging.info(
                                 f"queuing {album_name} in Deemix")
                             success, path, err = deemix.enqueue(
-                                upc, env.download_path)
+                                upc, env.download_path, isrc)
 
                         if not success:
                             logging.error(
@@ -205,6 +206,9 @@ def download(sp: spotipy.Spotify, not_found: set, force=False) -> set:
                         else:
                             logging.error(
                                 f"failed to add {album_name} to beets library: {e}")
+
+                    album_ids = set()
+                    isrcs = set()
 
             with open(playlist_path, "w") as f:
                 json.dump(playlist, f)
