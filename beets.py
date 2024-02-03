@@ -78,16 +78,26 @@ filetote:
 
         return True, path[:-2]
 
-    def add(self, path: str, search_id: str,  force=False) -> tuple[bool, str]:
+    def add(self, path: str, search_id=None) -> tuple[bool, str]:
 
-        result = subprocess.run(
-            [f"{self.beet}", "import", f"--search-id={search_id}", "--quiet", f"{path}"], stdout=subprocess.PIPE)
+        if search_id is not None:
+            result = subprocess.run(
+                [f"{self.beet}", "import", f"--search-id={search_id}", "--quiet", f"{path}"], stdout=subprocess.PIPE)
+        else:
+            result = subprocess.run(
+                [f"{self.beet}", "import", "--quiet", f"{path}"], stdout=subprocess.PIPE)
 
         # beet import failed
         if result.returncode == 1:
-            return False, result.stdout.decode("utf-8")
+            if search_id is None:
+                return False, result.stdout.decode("utf-8")
+            else:
+                return self.add(path, None)
 
         if "Skipping." in result.stdout.decode("utf-8"):
-            return False, "beets could not parse Spotify information"
+            if search_id is None:
+                return False, "beets was unable to find a matching release"
+            else:
+                return self.add(path, None)
 
         return True, ""
