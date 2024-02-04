@@ -48,7 +48,11 @@ env = Environment(
     interval=int(os.getenv("INTERVAL", "")),
 )
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    # filename=os.path.join(env.config_path, "logs"),
+    format='%(asctime)s %(message)s',
+    datefmt='%m/%d/%Y %I:%M:%S %p',
+    level=logging.INFO)
 deemix = deemix_dl.Deemix(env.deezer_arl, env.deemix_path)
 tidal = tidal_dl.Tidal(env.tidal_client_id,
                        env.tidal_client_secret, tidal_dl=env.tidal_dl_path)
