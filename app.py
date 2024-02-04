@@ -61,8 +61,6 @@ def download(sp: spotipy.Spotify, not_found: set, force=False) -> set:
     for username in usernames:
 
         try:
-            sleep = random.uniform(1, 5)
-            time.sleep(sleep)
             user_playlists = sp.user_playlists(username)
         except Exception as e:
             logging.error(f"skipping user {username}: {e}")
@@ -96,8 +94,6 @@ def download(sp: spotipy.Spotify, not_found: set, force=False) -> set:
             for i in range(k + r):
 
                 try:
-                    sleep = random.uniform(1, 3)
-                    time.sleep(sleep)
                     playlist_tracks = sp.playlist_tracks(
                         playlist_link, limit=100, offset=i, fields="items(id,track(name,external_ids.isrc,href,album(name,id,href,external_urls.spotify,external_ids.upc)))")
                 except Exception as e:
@@ -139,6 +135,8 @@ def download(sp: spotipy.Spotify, not_found: set, force=False) -> set:
                     albums = []
 
                     try:
+                        sleep = random.uniform(1, 3)
+                        time.sleep(sleep)
                         albums = sp.albums(album_ids)["albums"]
                     except Exception as e:
                         logging.error(f"skipping albums {album_ids}: {e}")
