@@ -142,7 +142,14 @@ class Deemix:
             except Exception as e:
                 return False, path, f"{e}"
 
-        return success, os.path.join(path, f"{upc}".lstrip("0")), error
+        path = os.path.join(path, f"{upc}".lstrip("0"))
+        error_path = os.path.join(path, "errors.txt")
+
+        if os.path.exists(error_path):
+            success = False
+            error = f"check {error_path} for more information"
+
+        return success, path, error
 
     def __enqueue(self, link: str, path: str):
         result = subprocess.run(
