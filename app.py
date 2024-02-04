@@ -206,6 +206,7 @@ def download(sp: spotipy.Spotify, not_found: set, force=False) -> set:
                         else:
                             logging.error(
                                 f"failed to add {album_name} to beets library: {e}")
+                            not_found.add(upc)
 
                     album_ids = set()
                     isrcs = set()
