@@ -133,7 +133,7 @@ def download(sp: spotipy.Spotify, not_found: set, force=False) -> set:
                     album_ids.add(album_id)
                     isrcs.add(isrc)
 
-                    if len(album_ids) < 20:
+                    if len(album_ids) < 20 and i < k+r-1:
                         continue
 
                     albums = []
