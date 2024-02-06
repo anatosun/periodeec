@@ -60,161 +60,200 @@ beets = beets.Beets(library_path=env.library_path, beet=env.beets_path)
 not_found_file = os.path.join(env.config_path, "not_found.txt")
 
 
+def get_playlist_tracks(sp: spotipy.Spotify, playlist_link: str, playlist_name: str, number_of_tracks: int) -> list:
+    try:
+        playlist_tracks = sp.playlist_tracks(
+            playlist_link, limit=100, offset=0, fields="items(id,track(name,external_ids.isrc,href,album(name,id,href,external_urls.spotify,external_ids.upc)))")
+        playlist_tracks = playlist_tracks["items"]
+    except Exception as e:
+        logging.error(f"skipping playlist '{playlist_name}': {e}")
+        return []
+
+    while len(playlist_tracks) < number_of_tracks:
+        time.sleep(random.uniform(1, 5))
+        try:
+            playlist_track_continued = sp.playlist_tracks(
+                playlist_link, limit=100, offset=len(playlist_tracks), fields="items(id,track(name,external_ids.isrc,href,album(name,id,href,external_urls.spotify,external_ids.upc)))")
+            playlist_tracks.extend(playlist_track_continued["items"])
+        except Exception as e:
+            logging.error(f"error getting '{playlist_name}' tracks: {e}")
+            return playlist_tracks
+
+    return playlist_tracks
+
+
+def get_username_playlists(sp: spotipy.Spotify, username: str,  force=False) -> list:
+
+    queued_playlists = []
+    try:
+        user_playlists = sp.user_playlists(username)
+    except Exception as e:
+        logging.error(f"skipping user {username}: {e}")
+        return queued_playlists
+
+    if user_playlists is None:
+        logging.error(f"skipping user {username}: playlists not found")
+        return queued_playlists
+
+    playlists = user_playlists["items"]
+    for playlist in playlists:
+        playlist_name = playlist["name"]
+        owner = playlist["owner"]["id"]
+        snapshot_id = playlist["snapshot_id"]
+
+        if not os.path.exists(f"{env.config_path}/cache/playlists/{owner}"):
+            os.makedirs(f"{env.config_path}/cache/playlists/{owner}")
+
+        playlist_path = f"{env.config_path}/cache/playlists/{owner}/{playlist_name}.json"
+
+        if os.path.exists(playlist_path) and not force:
+            with open(playlist_path, "r") as f:
+                data = json.load(f)
+                if data["snapshot_id"] == snapshot_id:
+                    continue
+
+        logging.info(f"queuing playlist '{playlist_name}' owned by '{owner}'")
+        queued_playlists.append((playlist, playlist_path))
+    return queued_playlists
+
+
+def download_tracks(sp: spotipy.Spotify, tracks: list,  not_found: set):
+
+    album_ids = set()
+    isrcs = set()
+    not_found = set()
+
+    for track in tracks:
+        track_name = track["track"]["name"]
+        isrc = track["track"]["external_ids"].get("isrc")
+        number_of_tracks = -1
+
+        if isrc is None:
+            logging.error(
+                f"skipping {track_name}: isrc not found")
+            continue
+
+        exists, path = beets.exists(isrc)
+
+        if exists:
+            logging.info(
+                f"skipping {track_name}: already exists at {path}")
+            continue
+
+        album = track["track"]["album"]
+        album_id = album["id"]
+
+        album_ids.add(album_id)
+        isrcs.add(isrc)
+
+        if len(album_ids) < 20 or number_of_tracks < 1:
+            continue
+
+        albums = []
+
+        try:
+            time.sleep(random.uniform(1, 3))
+            albums = sp.albums(album_ids)["albums"]
+        except Exception as e:
+            logging.error(f"skipping albums {album_ids}: {e}")
+            continue
+
+        if len(albums) < 1:
+            logging.error(f"failed to fetch albums ids")
+            continue
+
+        for album, isrc in zip(albums, isrcs):
+
+            album_name = album["name"]
+            album_id = album["external_urls"]["spotify"]
+
+            upc = album["external_ids"].get("upc")
+
+            if upc in not_found:
+                logging.info(
+                    f"skipping album {album_name}: upc previously not found")
+                continue
+
+            if upc is None:
+                logging.error(
+                    f"skipping album {album_name}: upc not found")
+                continue
+
+            success = False
+            err = ""
+            if "deemix" in env.downloaders:
+                logging.info(
+                    f"queuing {album_name} in Deemix")
+                success, path, err = deemix.enqueue(
+                    upc, env.download_path, isrc)
+
+            if not success:
+                logging.error(
+                    f"failed to download album {album_name}: {err}")
+
+            if not success and "tidal" in env.downloaders:
+                logging.info(
+                    f"queuing {album_name} in Tidal")
+                success, path, err = tidal.enqueue(
+                    upc, env.download_path)
+
+            if not success:
+                logging.error(
+                    f"failed to download album {album_name}: {err}")
+                not_found.add(upc)
+                continue
+
+            if not os.path.exists(path):
+                logging.error(
+                    f"failed to download album {album_name}: directory {path} doesn't exist")
+                not_found.add(upc)
+                continue
+
+            with open(os.path.join(path, "spotify.json"), "w") as f:
+                json.dump(album, f)
+
+            success, e = beets.add(path=path, search_id=album_id)
+
+            if success:
+                logging.info(
+                    f"added {album_name} to beets library")
+            else:
+                logging.error(
+                    f"failed to add {album_name} to beets library: {e}")
+                not_found.add(upc)
+
+        album_ids = set()
+        isrcs = set()
+
+    return not_found
+
+
 def download(sp: spotipy.Spotify, not_found: set, force=False) -> set:
     usernames = env.spotify_usernames.split(",")
     for username in usernames:
 
-        try:
-            user_playlists = sp.user_playlists(username)
-        except Exception as e:
-            logging.error(f"skipping user {username}: {e}")
-            continue
+        queued_playlists = get_username_playlists(
+            sp=sp, username=username, force=force)
 
-        if user_playlists is None:
-            logging.error(f"skipping user {username}: playlists not found")
+        for playlist, playlist_path in queued_playlists:
 
-        for playlist in user_playlists["items"]:
-            playlist_name = playlist["name"]
             playlist_link = playlist["external_urls"]["spotify"]
-            owner = playlist["owner"]["id"]
-            snapshot_id = playlist["snapshot_id"]
             number_of_tracks = playlist["tracks"]["total"]
+            playlist_name = playlist["name"]
 
-            if not os.path.exists(f"{env.config_path}/cache/playlists/{owner}"):
-                os.makedirs(f"{env.config_path}/cache/playlists/{owner}")
+            tracks = get_playlist_tracks(
+                sp=sp,
+                playlist_link=playlist_link,
+                playlist_name=playlist_name,
+                number_of_tracks=number_of_tracks)
 
-            playlist_path = f"{env.config_path}/cache/playlists/{owner}/{playlist_name}.json"
-            if os.path.exists(playlist_path) and not force:
-                with open(playlist_path, "r") as f:
-                    data = json.load(f)
-                    if data["snapshot_id"] == snapshot_id:
-                        logging.info(
-                            f"skipping {playlist_name}: already downloaded and no changes detected")
-                        continue
-
-            k = number_of_tracks // 100
-            r = 1 if number_of_tracks > k * 100 else 0
-
-            for i in range(k + r):
-
-                try:
-                    playlist_tracks = sp.playlist_tracks(
-                        playlist_link, limit=100, offset=i, fields="items(id,track(name,external_ids.isrc,href,album(name,id,href,external_urls.spotify,external_ids.upc)))")
-                except Exception as e:
-                    logging.error(f"skipping playlist {playlist_name}: {e}")
-                    continue
-
-                album_ids = set()
-                isrcs = set()
-
-                for track in playlist_tracks["items"]:
-
-                    track_name = track["track"]["name"]
-                    isrc = track["track"]["external_ids"].get("isrc")
-
-                    if isrc is None:
-                        logging.error(
-                            f"skipping {track_name}: isrc not found")
-                        continue
-
-                    with open("./track.json", "w") as f:
-                        json.dump(track, f)
-
-                    exists, path = beets.exists(isrc)
-
-                    if exists:
-                        logging.info(
-                            f"skipping {track_name}: already exists at {path}")
-                        continue
-
-                    album = track["track"]["album"]
-                    album_id = album["id"]
-
-                    album_ids.add(album_id)
-                    isrcs.add(isrc)
-
-                    if len(album_ids) < 20 and i < k+r-1:
-                        continue
-
-                    albums = []
-
-                    try:
-                        sleep = random.uniform(1, 3)
-                        time.sleep(sleep)
-                        albums = sp.albums(album_ids)["albums"]
-                    except Exception as e:
-                        logging.error(f"skipping albums {album_ids}: {e}")
-                        continue
-
-                    if len(albums) < 1:
-                        logging.error(f"failed to fetch albums ids")
-                        continue
-
-                    for album, isrc in zip(albums, isrcs):
-
-                        album_name = album["name"]
-                        album_id = album["external_urls"]["spotify"]
-
-                        upc = album["external_ids"].get("upc")
-
-                        if upc in not_found:
-                            logging.info(
-                                f"skipping album {album_name}: upc previously not found")
-                            continue
-
-                        if upc is None:
-                            logging.error(
-                                f"skipping album {album_name}: upc not found")
-                            continue
-
-                        success = False
-                        err = ""
-                        if "deemix" in env.downloaders:
-                            logging.info(
-                                f"queuing {album_name} in Deemix")
-                            success, path, err = deemix.enqueue(
-                                upc, env.download_path, isrc)
-
-                        if not success:
-                            logging.error(
-                                f"failed to download album {album_name}: {err}")
-
-                        if not success and "tidal" in env.downloaders:
-                            logging.info(
-                                f"queuing {album_name} in Tidal")
-                            success, path, err = tidal.enqueue(
-                                upc, env.download_path)
-
-                        if not success:
-                            logging.error(
-                                f"failed to download album {album_name}: {err}")
-                            not_found.add(upc)
-                            continue
-
-                        if not os.path.exists(path):
-                            logging.error(
-                                f"failed to download album {album_name}: directory {path} doesn't exist")
-                            not_found.add(upc)
-                            continue
-
-                        with open(os.path.join(path, "spotify.json"), "w") as f:
-                            json.dump(album, f)
-
-                        success, e = beets.add(path=path, search_id=album_id)
-
-                        if success:
-                            logging.info(
-                                f"added {album_name} to beets library")
-                        else:
-                            logging.error(
-                                f"failed to add {album_name} to beets library: {e}")
-                            not_found.add(upc)
-
-                    album_ids = set()
-                    isrcs = set()
+            not_found = download_tracks(
+                sp=sp, tracks=tracks, not_found=not_found)
 
             with open(playlist_path, "w") as f:
                 json.dump(playlist, f)
+
+            not_found.union(not_found)
 
     return not_found
 
