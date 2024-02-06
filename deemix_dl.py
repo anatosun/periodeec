@@ -14,7 +14,7 @@ config = """
   "createArtistFolder": true,
   "artistNameTemplate": "%artist%",
   "createAlbumFolder": true,
-  "albumNameTemplate": "%upc%",
+  "albumNameTemplate": "%album_id%",
   "createCDFolder": false,
   "createStructurePlaylist": true,
   "createSingleFolder": true,
@@ -121,50 +121,39 @@ class Deemix:
             return os.path.join(os.path.abspath("./"), config_folder)
 
     def enqueue(self, upc: str, path: str, isrc=None) -> tuple[bool, str, str]:
-        link = f"https:///api.deezer.com/album/upc:{upc}"
-        success, error = self.__enqueue(link, path)
+        link = f"https://api.deezer.com/2.0/album/upc:{upc}"
+        response = self.session.get(link)
+        id = response.json().get("id")
 
-        if not success and isrc is not None:
-            try:
-                response = self.session.get(
-                    f"https://api.deezer.com/2.0/track/isrc:{isrc}")
-                album = response.json().get("album")
-                if album is None:
-                    return success, path, "upc and isrc not found on Deezer"
-                link = album["link"]
-                id = album["id"]
-                response = self.session.get(
-                    f"https://api.deezer.com/2.0/album/{id}")
-                album = response.json()
-                upc = album["upc"]
-                return self.enqueue(upc, path, None)
+        if id is None:
+            if isrc is not None:
+                try:
+                    link = f"https://api.deezer.com/2.0/track/isrc:{isrc}"
+                    response = self.session.get(link)
+                    album = response.json().get("album")
+                    if album is None:
+                        return False, path, "upc and isrc not found on Deezer"
+                    link = album["link"]
+                    id = album["id"]
 
-            except Exception as e:
-                return False, path, f"{e}"
+                except Exception as e:
+                    return False, path, f"{e}"
+            else:
+                return False, path, "error upon Deezer API query"
 
-        path = os.path.join(path, f"{upc}".lstrip("0"))
-        error_path = os.path.join(path, "errors.txt")
+        link = f"https:///api.deezer.com/2.0/album/{id}"
 
-        if os.path.exists(error_path):
-            success = False
-            error = f"check {error_path} for more information"
-
-        return success, path, error
-
-    def __enqueue(self, link: str, path: str):
         result = subprocess.run(
             [f"{self.deemix}", "--path", f"{path}", f"{link}"], stdout=subprocess.PIPE)
-        error = ""
-        success = True
         try:
             stdout = result.stdout.decode("utf-8")
         except Exception as e:
-            return False, f"{e}"
+            return False, path, f"{e}"
 
         if result.returncode == 1:
-            return False, stdout.replace("\n", " ")
+            return False, path, stdout.replace("\n", " ")
 
         if "DataException" in stdout:
-            return False, stdout.replace("\n", " ")
+            return False, path, stdout.replace("\n", " ")
 
-        return success, error
+        return True, os.path.join(path, str(id)), ""

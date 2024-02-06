@@ -132,24 +132,24 @@ def download_tracks(sp: spotipy.Spotify, tracks: list,  not_found: set):
         if isrc is None:
             logging.debug(
                 f"skipping {track_name}: isrc not found")
-            continue
+        else:
 
-        exists, path = beets.exists(isrc)
+            exists, path = beets.exists(isrc)
 
-        if exists:
-            logging.debug(
-                f"skipping {track_name}: already exists at {path}")
-            continue
+            if exists:
+                logging.debug(
+                    f"skipping {track_name}: already exists at {path}")
+            else:
 
-        album = track["track"]["album"]
-        album_id = album["id"]
+                album = track["track"]["album"]
+                album_id = album["id"]
 
-        album_ids.add(album_id)
-        isrcs.add(isrc)
-        logging.info(
-            f"queuing {track_name}")
+                album_ids.add(album_id)
+                isrcs.add(isrc)
+                logging.info(
+                    f"queuing {track_name} {len(album_ids)}/20")
 
-        if len(album_ids) < 20 or number_of_tracks < 1:
+        if len(album_ids) < 20 and number_of_tracks > 0:
             continue
 
         albums = []
@@ -185,6 +185,7 @@ def download_tracks(sp: spotipy.Spotify, tracks: list,  not_found: set):
 
             success = False
             err = ""
+            path = ""
             if "deemix" in env.downloaders:
                 logging.debug(
                     f"queuing {album_name} in Deemix")
