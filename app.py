@@ -152,7 +152,7 @@ def download_tracks(sp: spotipy.Spotify, tracks: list,  not_found: set):
                 logging.info(
                     f"queuing {track_name} {len(album_ids)}/20")
 
-        if len(album_ids) < 20 and number_of_tracks > 0:
+        if (len(album_ids) < 20 and number_of_tracks > 0) or len(album_ids) < 1:
             continue
 
         albums = []
