@@ -112,7 +112,8 @@ def get_username_playlists(sp: spotipy.Spotify, username: str,  force=False) -> 
                 if data["snapshot_id"] == snapshot_id:
                     continue
 
-        logging.info(f"queuing playlist '{playlist_name}' owned by '{owner}'")
+        logging.info(
+            f"queuing playlist '{playlist_name}' from '{username}' profile")
         queued_playlists.append((playlist, playlist_path))
     return queued_playlists
 
@@ -128,10 +129,15 @@ def download_tracks(sp: spotipy.Spotify, tracks: list,  not_found: set):
         track_name = track["track"]["name"]
         isrc = track["track"]["external_ids"].get("isrc")
         number_of_tracks = number_of_tracks - 1
+        album = track["track"]["album"]
+        album_id = album["id"]
 
         if isrc is None:
             logging.debug(
                 f"skipping {track_name}: isrc not found")
+        elif album_id in album_ids:
+            logging.debug(
+                f"skipping {track_name}: already in queue")
         else:
 
             exists, path = beets.exists(isrc)
@@ -140,9 +146,6 @@ def download_tracks(sp: spotipy.Spotify, tracks: list,  not_found: set):
                 logging.debug(
                     f"skipping {track_name}: already exists at {path}")
             else:
-
-                album = track["track"]["album"]
-                album_id = album["id"]
 
                 album_ids.add(album_id)
                 isrcs.add(isrc)
@@ -159,6 +162,8 @@ def download_tracks(sp: spotipy.Spotify, tracks: list,  not_found: set):
             albums = sp.albums(album_ids)["albums"]
         except Exception as e:
             logging.debug(f"skipping albums {album_ids}: {e}")
+            album_ids = set()
+            isrcs = set()
             continue
 
         if len(albums) < 1:
