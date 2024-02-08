@@ -52,7 +52,11 @@ match:
   track_length_grace: 10 # 10
   track_length_max: 30 # 30
 filetote:
-  extensions: .cue .log .json .png .jpg .jpeg .lrc
+  extensions: .cue .log .json .png .jpg .jpeg .lrc .nfo
+musicbrainz:
+    enabled: no
+chroma:
+    auto: no
         """
         self.beet = beet
         config_path = os.path.join(os.environ["HOME"], "beets")
@@ -80,10 +84,19 @@ filetote:
 
     def add(self, path: str, search_id: str) -> tuple[bool, str]:
 
-        result = subprocess.run(
-            [f"{self.beet}", "import", f"--search-id={search_id}", "--quiet", f"{path}"], stdout=subprocess.PIPE)
+        if search_id == "":
 
-        # beet import failed
+            result = subprocess.run(
+                [f"{self.beet}", "import", "--quiet", f"{path}"], stdout=subprocess.PIPE)
+
+        else:
+
+            result = subprocess.run(
+                [f"{self.beet}", "import", f"--search-id={search_id}", "--quiet", f"{path}"], stdout=subprocess.PIPE)
+
+        if "This album is already in the library!" in result.stdout.decode("utf-8"):
+            return False, "album already exists in beets library"
+
         if result.returncode == 1:
             return False, result.stdout.decode("utf-8").replace("\n", "")
 
