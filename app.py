@@ -76,17 +76,21 @@ def get_playlist_tracks(sp: spotipy.Spotify, playlist_link: str, playlist_name: 
                 playlist_link, limit=100, offset=len(playlist_tracks), fields="items(id,track(name,external_ids.isrc,href,album(name,id,href,external_urls.spotify,external_ids.upc)))")
             playlist_tracks.extend(playlist_track_continued["items"])
         except Exception as e:
-            logging.error(f"error getting '{playlist_name}' tracks: {e}")
+            logging.error(
+                f"error getting '{playlist_name}' tracks at offset {len(playlist_tracks)}: {e}")
             return playlist_tracks
 
     return playlist_tracks
 
 
-def get_username_playlists(sp: spotipy.Spotify, username: str,  force=False) -> list:
+def get_username_playlists(sp: spotipy.Spotify, username: str,  force=False, offset=0, items=[]) -> list:
 
     queued_playlists = []
+    number_of_playlists = 0
     try:
-        user_playlists = sp.user_playlists(username)
+        user_playlists = sp.user_playlists(username, limit=50)
+        number_of_playlists = user_playlists["total"]
+
     except Exception as e:
         logging.error(f"skipping user {username}: {e}")
         return queued_playlists
@@ -96,6 +100,16 @@ def get_username_playlists(sp: spotipy.Spotify, username: str,  force=False) -> 
         return queued_playlists
 
     playlists = user_playlists["items"]
+
+    while len(playlists) < number_of_playlists:
+        try:
+            user_playlists = sp.user_playlists(
+                username, limit=50, offset=len(playlists))
+            playlists.extend(user_playlists["items"])
+        except Exception as e:
+            logging.error(
+                f"error getting '{username} playlists at offset {len(playlists)}: {e}")
+
     for playlist in playlists:
         playlist_name = playlist["name"]
         owner = playlist["owner"]["id"]
