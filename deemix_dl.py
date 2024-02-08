@@ -165,7 +165,9 @@ class Deemix:
             failed_album = os.path.join(failed, str(id))
             failed_album_errors = os.path.join(failed_album, "errors.txt")
 
-            os.rename(album_path, failed_album)
+            if not os.path.exists(failed_album):
+                os.rename(album_path, failed_album)
+
             return False, failed_album, f"check {failed_album_errors} for more details"
 
         return True, album_path, ""
