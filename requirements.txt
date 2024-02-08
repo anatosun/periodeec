@@ -1,7 +1,7 @@
 requests
 spotipy
 async-timeout
-beets
+git+https://github.com/beetbox/beets.git
 beets-filetote
 tidal-dl
 deemix
