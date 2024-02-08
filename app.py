@@ -112,8 +112,6 @@ def get_username_playlists(sp: spotipy.Spotify, username: str,  force=False) -> 
                 if data["snapshot_id"] == snapshot_id:
                     continue
 
-        logging.info(
-            f"queuing playlist '{playlist_name}' from '{username}' profile")
         queued_playlists.append((playlist, playlist_path))
     return queued_playlists
 
@@ -251,6 +249,8 @@ def download(sp: spotipy.Spotify, not_found: set, force=False) -> set:
             playlist_link = playlist["external_urls"]["spotify"]
             number_of_tracks = playlist["tracks"]["total"]
             playlist_name = playlist["name"]
+            logging.info(
+                f"queuing playlist '{playlist_name}' from '{username}' profile")
 
             tracks = get_playlist_tracks(
                 sp=sp,
