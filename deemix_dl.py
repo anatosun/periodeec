@@ -156,4 +156,16 @@ class Deemix:
         if "DataException" in stdout:
             return False, path, stdout.replace("\n", " ")
 
-        return True, os.path.join(path, str(id)), ""
+        album_path = os.path.join(path, str(id))
+
+        if os.path.exists(os.path.join(album_path, "errors.txt")):
+            failed = os.path.join(path, "failed")
+            if not os.path.exists(failed):
+                os.makedirs(failed)
+            failed_album = os.path.join(failed, str(id))
+            failed_album_errors = os.path.join(failed_album, "errors.txt")
+
+            os.rename(album_path, failed_album)
+            return False, failed_album, f"check {failed_album_errors} for more details"
+
+        return True, album_path, ""
