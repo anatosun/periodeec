@@ -151,7 +151,12 @@ class Deemix:
             return False, path, f"{e}"
 
         if result.returncode == 1:
-            return False, path, stdout.replace("\n", " ")
+            if result.stderr is not None:
+                return False, path, result.stderr.decode("utf-8").replace("\n", " ")
+            elif stdout != "":
+                return False, path, stdout
+            else:
+                return False, path, "deemix returned a non-zero exit code"
 
         if "DataException" in stdout:
             return False, path, stdout.replace("\n", " ")
