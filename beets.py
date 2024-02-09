@@ -94,13 +94,16 @@ chroma:
             result = subprocess.run(
                 [f"{self.beet}", "import", f"--search-id={search_id}", "--quiet", f"{path}"], stdout=subprocess.PIPE)
 
-        if "This album is already in the library!" in result.stdout.decode("utf-8"):
+        result_output = result.stdout.decode("utf-8")
+        if "This album is already in the library!" in result_output:
             return False, "album already exists in beets library"
 
         if result.returncode == 1:
-            return False, result.stdout.decode("utf-8").replace("\n", "")
+            return False, result_output.replace("\n", "")
 
-        if "Skipping." in result.stdout.decode("utf-8"):
-            return False, "beets was unable to find a matching release"
+        if "Skipping." in result_output:
+            result_output = result_output.replace(
+                "\n", " ").replace("Skipping.", "")
+            return False, f"beets was unable to find a matching release {result_output}"
 
         return True, ""
