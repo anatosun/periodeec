@@ -132,8 +132,8 @@ def get_username_playlists(sp: spotipy.Spotify, username: str,  force=False, off
 
 def download_tracks(sp: spotipy.Spotify, tracks: list,  not_found: set):
 
-    album_ids = set()
-    isrcs = set()
+    ids = set()
+    isrcs = {}
     not_found = set()
     number_of_tracks = len(tracks)
 
@@ -147,7 +147,7 @@ def download_tracks(sp: spotipy.Spotify, tracks: list,  not_found: set):
         if isrc is None:
             logging.debug(
                 f"skipping {track_name}: isrc not found")
-        elif album_id in album_ids:
+        elif album_id in ids:
             logging.debug(
                 f"skipping {track_name}: already in queue")
         else:
@@ -159,36 +159,38 @@ def download_tracks(sp: spotipy.Spotify, tracks: list,  not_found: set):
                     f"skipping {track_name}: already exists at {path}")
             else:
 
-                album_ids.add(album_id)
-                isrcs.add(isrc)
+                ids.add(album_id)
+                isrcs[album_id] = isrc
                 logging.info(
-                    f"queuing {track_name} {len(album_ids)}/20")
+                    f"queuing {track_name} {len(ids)}/20")
 
-        if (len(album_ids) < 20 and number_of_tracks > 0) or len(album_ids) < 1:
+        if (len(ids) < 20 and number_of_tracks > 0) or len(ids) < 1:
             continue
 
         albums = []
 
         try:
             time.sleep(random.uniform(1, 3))
-            albums = sp.albums(album_ids)["albums"]
+            albums = sp.albums(ids)["albums"]
         except Exception as e:
-            logging.debug(f"skipping albums {album_ids}: {e}")
-            album_ids = set()
-            isrcs = set()
+            logging.debug(f"skipping albums {ids}: {e}")
+            ids = set()
             continue
 
         if len(albums) < 1:
             logging.error(f"failed to fetch albums ids")
             continue
 
-        logging.info(f"starting to download {len(album_ids)} albums")
-        for album, isrc in zip(albums, isrcs):
+        logging.info(f"starting to download {len(ids)} albums")
+        ids = set()
+        for album in albums:
 
             album_name = album["name"]
-            album_id = album["external_urls"]["spotify"]
+            album_link = album["external_urls"]["spotify"]
+            album_id = album["id"]
 
             upc = album["external_ids"].get("upc")
+            isrc = isrcs[album_id]
 
             if upc in not_found:
                 logging.debug(
@@ -235,7 +237,7 @@ def download_tracks(sp: spotipy.Spotify, tracks: list,  not_found: set):
                 with open(os.path.join(path, "spotify.json"), "w") as f:
                     json.dump(album, f)
 
-            success, e = beets.add(path=path, search_id=album_id)
+            success, e = beets.add(path=path, search_id=album_link)
 
             if success:
                 logging.info(
@@ -244,9 +246,6 @@ def download_tracks(sp: spotipy.Spotify, tracks: list,  not_found: set):
                 logging.error(
                     f"failed to add {album_name} to beets library: {e}")
                 not_found.add(upc)
-
-        album_ids = set()
-        isrcs = set()
 
     return not_found
 
