@@ -156,7 +156,7 @@ class Deemix:
             elif stdout != "":
                 return False, path, stdout
             else:
-                return False, path, "deemix returned a non-zero exit code"
+                return False, path, f"deemix returned a non-zero exit code when processing {link} with upc={upc} and isrc={isrc}"
 
         if "DataException" in stdout:
             return False, path, stdout.replace("\n", " ")
