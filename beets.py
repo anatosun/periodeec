@@ -73,14 +73,13 @@ chroma:
         result = subprocess.run(
             [f"{self.beet}", "list", f"isrc:{isrc}", "--format", "'$path'"], stdout=subprocess.PIPE)
 
-        path = result.stdout.decode("utf-8")
         if result.returncode == 1:
-            return False, path
+            return False, ""
 
         if result.stdout.decode("utf-8") == "":
-            return False, path
+            return False, ""
 
-        return True, path[:-2]
+        return True, result.stdout.decode("utf-8")[:-2]
 
     def add(self, path: str, search_id: str) -> tuple[bool, str]:
 
@@ -99,11 +98,17 @@ chroma:
             return False, "album already exists in beets library"
 
         if result.returncode == 1:
-            return False, result_output.replace("\n", "")
+            if search_id == "":
+                return False, result_output.replace("\n", "")
+            else:
+                return self.add(path, "")
 
         if "Skipping." in result_output:
-            result_output = result_output.replace(
-                "\n", " ").replace("Skipping.", "")
-            return False, f"beets was unable to find a matching release {result_output}"
+            if search_id == "":
+                result_output = result_output.replace(
+                    "\n", " ").replace("Skipping.", "")
+                return False, f"beets was unable to find a matching release {result_output}"
+            else:
+                return self.add(path, "")
 
         return True, ""

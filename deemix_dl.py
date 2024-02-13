@@ -120,38 +120,25 @@ class Deemix:
         else:
             return os.path.join(os.path.abspath("./"), config_folder)
 
-    def enqueue(self, upc: str, path: str, isrc=None) -> tuple[bool, str, str]:
-        link = f"https://api.deezer.com/2.0/album/upc:{upc}"
-        response = self.session.get(link)
-        id = response.json().get("id")
+    def enqueue(self, path: str, isrc=None) -> tuple[bool, str, str]:
+        try:
+            link = f"https://api.deezer.com/2.0/track/isrc:{isrc}"
+            response = self.session.get(link)
+            album = response.json().get("album")
+            artist = response.json().get("artist")
 
-        if id is None:
-            if isrc is not None:
-                try:
-                    link = f"https://api.deezer.com/2.0/track/isrc:{isrc}"
-                    response = self.session.get(link)
-                    album = response.json().get("album")
-                    artist = response.json().get("artist")
-                    if album is None or artist is None:
-                        return False, path, "upc and isrc not found on Deezer"
+            if album is None or artist is None:
+                return False, path, f"album not found for track with isrc {isrc}"
 
-                    album_id = album["id"]
-                    link = f"https://api.deezer.com/2.0/album/{album_id}"
-                    response = self.session.get(link)
-                    id = response.json().get("id")
+            id = album["id"]
+            link = link if album.get("link") is None else album["link"]
 
-                    if id != album_id:
-                        return False, path, f"track {isrc} returned the wrong album id {album_id}"
-
-                except Exception as e:
-                    return False, path, f"{e}"
-            else:
-                return False, path, "error upon Deezer API query"
-
-        link = f"https://api.deezer.com/2.0/album/{id}"
+        except Exception as e:
+            return False, path, f"{e}"
 
         result = subprocess.run(
             [f"{self.deemix}", "--path", f"{path}", f"{link}"], stdout=subprocess.PIPE)
+
         try:
             stdout = result.stdout.decode("utf-8")
         except Exception as e:
@@ -163,7 +150,7 @@ class Deemix:
             elif stdout != "":
                 return False, path, stdout
             else:
-                return False, path, f"deemix returned a non-zero exit code when processing {link} with upc={upc} and isrc={isrc}"
+                return False, path, f"deemix returned a non-zero exit code when processing {link} with isrc={isrc}"
 
         if "DataException" in stdout:
             return False, path, stdout.replace("\n", " ")
