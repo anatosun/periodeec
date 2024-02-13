@@ -131,17 +131,24 @@ class Deemix:
                     link = f"https://api.deezer.com/2.0/track/isrc:{isrc}"
                     response = self.session.get(link)
                     album = response.json().get("album")
-                    if album is None:
+                    artist = response.json().get("artist")
+                    if album is None or artist is None:
                         return False, path, "upc and isrc not found on Deezer"
-                    link = album["link"]
-                    id = album["id"]
+
+                    album_id = album["id"]
+                    link = f"https://api.deezer.com/2.0/album/{album_id}"
+                    response = self.session.get(link)
+                    id = response.json().get("id")
+
+                    if id != album_id:
+                        return False, path, f"track {isrc} returned the wrong album id {album_id}"
 
                 except Exception as e:
                     return False, path, f"{e}"
             else:
                 return False, path, "error upon Deezer API query"
 
-        link = f"https:///api.deezer.com/2.0/album/{id}"
+        link = f"https://api.deezer.com/2.0/album/{id}"
 
         result = subprocess.run(
             [f"{self.deemix}", "--path", f"{path}", f"{link}"], stdout=subprocess.PIPE)
