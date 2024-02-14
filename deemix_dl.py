@@ -136,8 +136,11 @@ class Deemix:
         except Exception as e:
             return False, path, f"{e}"
 
-        result = subprocess.run(
-            [f"{self.deemix}", "--path", f"{path}", f"{link}"], stdout=subprocess.PIPE)
+        try:
+            result = subprocess.run(
+                [f"{self.deemix}", "--path", f"{path}", f"{link}"], stdout=subprocess.PIPE)
+        except Exception as e:
+            return False, path, f"{e}"
 
         try:
             stdout = result.stdout.decode("utf-8")
