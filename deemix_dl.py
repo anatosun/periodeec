@@ -131,7 +131,17 @@ class Deemix:
                 return False, path, f"album not found for track with isrc {isrc}"
 
             id = album["id"]
-            link = link if album.get("link") is None else album["link"]
+            link = album.get("link")
+
+            if link is None:
+                return False, path, f"album link not found for track with isrc {isrc}"
+            link = str(link)
+            response = self.session.get(link)
+
+            if response.history[-1].status_code == 302:
+                link = response.history[-1].url
+
+            id = link[link.find("album/")+6:]
 
         except Exception as e:
             return False, path, f"{e}"
