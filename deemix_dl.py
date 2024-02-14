@@ -150,7 +150,7 @@ class Deemix:
             result = subprocess.run(
                 [f"{self.deemix}", "--path", f"{path}", f"{link}"], stdout=subprocess.PIPE)
         except Exception as e:
-            return False, path, f"{e}"
+            return False, path, f"deemix returned a non-zero exit code when processing {link} with isrc={isrc}"
 
         try:
             stdout = result.stdout.decode("utf-8")
