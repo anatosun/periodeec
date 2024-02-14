@@ -137,12 +137,17 @@ def download_tracks(sp: spotipy.Spotify, tracks: list):
         isrc = track["track"]["external_ids"].get("isrc")
         album = track["track"]["album"]
         album_id = album["id"]
-        album_link = album["external_urls"]["spotify"]
+        album_link = album["external_urls"].get("spotify")
         album_name = album["name"]
 
         if isrc is None:
             logging.info(
                 f"skipping {track_name}: isrc not found")
+            continue
+
+        if album_link is None:
+            logging.info(
+                f"skipping {track_name}: album link found")
             continue
 
         exists, path = beets.exists(isrc)
