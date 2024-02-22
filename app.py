@@ -133,6 +133,10 @@ def get_username_playlists(sp: spotipy.Spotify, username: str,  force=False, off
 def download_tracks(sp: spotipy.Spotify, tracks: list):
 
     for track in tracks:
+
+        if track["track"] is None:
+            continue
+
         track_name = track["track"]["name"]
         isrc = track["track"]["external_ids"].get("isrc")
         album = track["track"]["album"]
