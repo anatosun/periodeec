@@ -24,8 +24,7 @@ RUN chown -R $PUID:$PGID $CONFIG
 
 USER $UNAME
 
-ENV PATH="${WORKDIR}/.env/bin:$PATH"
-ENV PATH="${CONFIG}/local/bin:$PATH"
+ENV PATH="${WORKDIR}/.venv/bin:$PATH"
 RUN python -m venv .venv
 RUN pip install -r requirements.txt
 CMD python "app.py"
