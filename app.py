@@ -118,6 +118,9 @@ def get_username_playlists(sp: spotipy.Spotify, username: str,  force=False, off
         if not os.path.exists(f"{env.config_path}/cache/playlists/{owner}"):
             os.makedirs(f"{env.config_path}/cache/playlists/{owner}")
 
+        for char in '<>:"/\|?* ':
+            playlist_name = playlist_name.replace(char, '_')
+
         playlist_path = f"{env.config_path}/cache/playlists/{owner}/{playlist_name}.json"
 
         if os.path.exists(playlist_path) and not force:
