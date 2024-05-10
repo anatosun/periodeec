@@ -170,3 +170,4 @@ lib64
 # periodeec
 ./config
 not_found.txt
+*.json
