@@ -38,7 +38,6 @@ class Tidal:
         self.client_secret = client_secret
         self.session = requests.Session()
         self.login()
-        self.tidal_dl = tidal_dl
         self.expiration = datetime.datetime.now(
         )+datetime.timedelta(seconds=int(self.expires_in))
 
@@ -47,7 +46,7 @@ class Tidal:
             self.__get_token_path(), token_filename)
 
         if not os.path.exists(self.token_path):
-            subprocess.run([f"{self.tidal_dl}"])
+            subprocess.run([f"tidal-dl"])
         self.config_file_path = os.path.join(
             self.__get_token_path(), ".tidal-dl.json")
 
@@ -115,7 +114,7 @@ class Tidal:
         if id is None or id == "":
             return False, path, f"upc {upc} not found on Tidal"
         result = subprocess.run(
-            [f"{self.tidal_dl}", "--link", f"{id}", f"{path}"], stdout=subprocess.PIPE)
+            ["tidal-dl", "--link", f"{id}", f"{path}"], stdout=subprocess.PIPE)
 
         if result.returncode == 1:
             return False, path, "tidal-dl exited with code 1"

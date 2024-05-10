@@ -4,7 +4,7 @@ import os
 
 class Beets():
 
-    def __init__(self, library_path="/music", beet="/usr/bin/beet"):
+    def __init__(self, library_path="/music"):
         config = f"""
 plugins: spotify filetote
 directory: {library_path}
@@ -44,7 +44,8 @@ match:
     countries: [] # []
     media: [] # []
     original_year: no # no
-  ignored: ["missing_tracks", "track_length", "unmatched_tracks", "track_index"] # []
+  ignored: ["missing_tracks", "track_length",
+      "unmatched_tracks", "track_index"] # []
   required: [] # []
   ignored_media: [] # []
   ignore_data_tracks: yes # yes
@@ -58,7 +59,6 @@ musicbrainz:
 chroma:
     auto: no
         """
-        self.beet = beet
         config_path = os.path.join(os.environ["HOME"], "beets")
         if not os.path.exists(config_path):
             os.makedirs(config_path)
@@ -71,7 +71,7 @@ chroma:
     def exists(self, isrc: str) -> tuple[bool, str]:
 
         result = subprocess.run(
-            [f"{self.beet}", "list", f"isrc:{isrc}", "--format", "'$path'"], stdout=subprocess.PIPE)
+            [f"beet", "list", f"isrc:{isrc}", "--format", "'$path'"], stdout=subprocess.PIPE)
 
         if result.returncode == 1:
             return False, ""
@@ -86,12 +86,12 @@ chroma:
         if search_id == "":
 
             result = subprocess.run(
-                [f"{self.beet}", "import", "--quiet", f"{path}"], stdout=subprocess.PIPE)
+                [f"beet", "import", "--quiet", f"{path}"], stdout=subprocess.PIPE)
 
         else:
 
             result = subprocess.run(
-                [f"{self.beet}", "import", f"--search-id={search_id}", "--quiet", f"{path}"], stdout=subprocess.PIPE)
+                [f"beet", "import", f"--search-id={search_id}", "--quiet", f"{path}"], stdout=subprocess.PIPE)
 
         result_output = result.stdout.decode("utf-8")
         if "This album is already in the library!" in result_output:

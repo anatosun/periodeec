@@ -94,9 +94,8 @@ config = """
 
 class Deemix:
 
-    def __init__(self, arl: str, deemix='/usr/bin/deemix'):
+    def __init__(self, arl: str):
         self.arl = arl
-        self.deemix = deemix
         self.session = requests.Session()
         arl_path = os.path.join(self.__get_config_path(), ".arl")
         with open(arl_path, 'w', encoding="utf-8") as f:
@@ -148,7 +147,7 @@ class Deemix:
 
         try:
             result = subprocess.run(
-                [f"{self.deemix}", "--path", f"{path}", f"{link}"], stdout=subprocess.PIPE)
+                [f"deemix", "--path", f"{path}", f"{link}"], stdout=subprocess.PIPE)
         except Exception as e:
             return False, path, f"deemix returned a non-zero exit code when processing {link} with isrc={isrc}"
 
