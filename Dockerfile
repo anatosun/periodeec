@@ -1,6 +1,8 @@
-FROM python:3.11-rc-bullseye
+FROM python:3.11-slim-bullseye
 
 RUN apt-get update && apt-get upgrade -y 
+RUN apt-get install git -y 
+
 
 
 ENV WORKDIR /app
@@ -14,9 +16,9 @@ COPY . $WORKDIR
 
 
 
-ARG UNAME=abc
-ARG PUID=1000
-ARG PGID=1000
+ARG UNAME=periodeec
+ENV PUID=1000
+ENV PGID=1000
 RUN groupadd -g $PGID -o $UNAME
 RUN useradd -m -u $PUID -g $PGID -o -s /bin/bash $UNAME
 RUN chown -R $PUID:$PGID $WORKDIR
@@ -27,4 +29,5 @@ USER $UNAME
 ENV PATH="${WORKDIR}/.venv/bin:$PATH"
 RUN python -m venv .venv
 RUN pip install -r requirements.txt
-CMD python "app.py"
+RUN pip install -e .
+CMD ["periodeec"]
