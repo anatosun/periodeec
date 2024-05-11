@@ -79,7 +79,7 @@ chroma:
         if result.stdout.decode("utf-8") == "":
             return False, ""
 
-        return True, result.stdout.decode("utf-8")[:-1].replace("'", "")
+        return True, result.stdout.decode("utf-8").split("\n")[0].replace("'", "")
 
     def add(self, path: str, search_id: str) -> tuple[bool, str]:
 
