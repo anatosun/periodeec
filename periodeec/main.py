@@ -207,11 +207,12 @@ def download_playlist(sp: spotipy.Spotify,
     owner = playlist["owner"]["id"]
     snapshot_id = playlist["snapshot_id"]
 
-    owner_folder = f"{cache_path}/playlists/{owner}"
+    owner_folder = os.path.join(f"{cache_path}/playlists/{owner}")
+
     if not os.path.exists(owner_folder):
         os.makedirs(owner_folder)
 
-    playlist_path = f"{owner_folder}/{playlist_name}.json"
+    playlist_path = os.path.join(f"{owner_folder}/{playlist_name}.json")
 
     if os.path.exists(playlist_path):
         with open(playlist_path, "r") as f:
@@ -362,7 +363,7 @@ def main():
             url=playlist.url,
             plex_usernames=playlist.sync_to_plex_users,
             plex_server=plex_server,
-            cache_path=os.path.join(env.config, "cache"),
+            cache_path=os.path.join(f"{env.config}/cache"),
             playlists_path=config.settings.playlist,
             download_path=settings.downloads,
             beets=bt,
