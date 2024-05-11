@@ -252,8 +252,9 @@ def download_playlist(sp: spotipy.Spotify,
     if not os.path.exists(playlists_path):
         os.makedirs(playlists_path)
 
-    m3u8 = f"{playlists_path}/{playlist_id}.m3u8"
-    with open(m3u8, "w") as f:
+    m3u = os.path.join(f"{playlists_path}/{playlist_id}.m3u")
+    m3u = os.path.abspath(m3u)
+    with open(m3u, "w") as f:
         f.write("#EXTM3U\n")
         for track, path in fetched:
             f.write(f"#EXTINF:0,{track}\n")
@@ -271,7 +272,7 @@ def download_playlist(sp: spotipy.Spotify,
         pl = plex_server.createPlaylist(
             title=title,
             section=plex_section,
-            m3ufilepath=m3u8)
+            m3ufilepath=m3u)
 
         pl.uploadPoster(url=poster)
         pl.editSummary(summary=summary)
@@ -285,7 +286,7 @@ def download_playlist(sp: spotipy.Spotify,
         pl = plex_server.createPlaylist(
             title=title,
             section=plex_section,
-            m3ufilepath=m3u8)
+            m3ufilepath=m3u)
         items = pl.items()
         cl = plex_server.createCollection(
             title=title,
