@@ -36,7 +36,7 @@ jobs:
           docker buildx build --platform linux/arm64 -t ghcr.io/${{github.actor}}/periodeec:arm64v8 --load .
           docker push ghcr.io/${{github.actor}}/periodeec:arm64v8
 
-      - name: "Build arm32v7 Periodeec Image"
-        run: |
-          docker buildx build --platform linux/arm/v7 -t ghcr.io/${{github.actor}}/periodeec:arm32v7 --load .
-          docker push ghcr.io/${{github.actor}}/periodeec:arm32v7
+      # - name: "Build arm32v7 Periodeec Image"
+      #   run: |
+      #     docker buildx build --platform linux/arm/v7 -t ghcr.io/${{github.actor}}/periodeec:arm32v7 --load .
+      #     docker push ghcr.io/${{github.actor}}/periodeec:arm32v7
