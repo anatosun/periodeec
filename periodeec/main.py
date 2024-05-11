@@ -218,9 +218,9 @@ def download_playlist(sp: spotipy.Spotify,
         with open(playlist_path, "r") as f:
 
             data = json.load(f)
-            old_snapshot_id = data["snapshot_id"]
-
-            if snapshot_id == old_snapshot_id:
+            if data["snapshot_id"] == snapshot_id:
+                logging.debug(
+                    f"skipping playlist '{playlist_name}': already downloaded")
                 return
 
     logging.info(
