@@ -55,6 +55,7 @@ def get_playlist_tracks(sp: spotipy.Spotify, playlist_link: str, playlist_name: 
 
 def get_username_playlists(sp: spotipy.Spotify, username: str) -> list:
 
+    logging.info(f"getting playlists for user {username}")
     number_of_playlists = 0
     try:
         user_playlists = sp.user_playlists(username, limit=50)
