@@ -254,7 +254,8 @@ def download_playlist(sp: spotipy.Spotify,
     if not os.path.exists(playlists_path):
         os.makedirs(playlists_path)
 
-    m3u = os.path.join(f"{playlists_path}/{playlist_id}.m3u")
+    m3u = os.path.join(
+        f"{playlists_path}/{playlist_id}{'_collection' if collection else ''}.m3u")
     m3u = os.path.abspath(m3u)
     with open(m3u, "w") as f:
         f.write("#EXTM3U\n")
@@ -262,31 +263,10 @@ def download_playlist(sp: spotipy.Spotify,
             f.write(f"#EXTINF:0,{track}\n")
             f.write(f"{path}\n")
 
-    admin = plex_server.account().username
-    for username in plex_usernames:
-        if plex_server.account().username != username:
-            plex_server = plex_server.switchUser(username)
-
-        if plex_server.playlist(title=title) is not None:
-            pl = plex_server.playlist(title=title)
-            pl.delete()
-
-        pl = plex_server.createPlaylist(
-            title=title,
-            section=plex_section,
-            m3ufilepath=m3u)
-
-        pl.uploadPoster(url=poster)
-        pl.editSummary(summary=summary)
-        logging.info(f"created plex playlist '{title}'"
-                     + f" for user '{username}'")
-
-    if plex_server.account().username != admin:
-        plex_server = plex_server.switchUser(admin)
-
     if collection:
+
         pl = plex_server.createPlaylist(
-            title=title,
+            title=title+" (temp)",
             section=plex_section,
             m3ufilepath=m3u)
         items = pl.items()
@@ -298,6 +278,26 @@ def download_playlist(sp: spotipy.Spotify,
         cl.uploadPoster(url=poster)
         cl.editSummary(summary=summary)
         logging.info(f"created plex collection '{title}'")
+
+    else:
+
+        for username in plex_usernames:
+            if plex_server.account().username != username:
+                plex_server = plex_server.switchUser(username)
+
+            if plex_server.playlist(title=title) is not None:
+                pl = plex_server.playlist(title=title)
+                pl.delete()
+
+            pl = plex_server.createPlaylist(
+                title=title,
+                section=plex_section,
+                m3ufilepath=m3u)
+
+            pl.uploadPoster(url=poster)
+            pl.editSummary(summary=summary)
+            logging.info(f"created plex playlist '{title}'"
+                         + f" for user '{username}'")
 
     with open(playlist_path, "w") as f:
         json.dump(playlist, f)
@@ -370,7 +370,26 @@ def main():
             beets=bt,
             downloaders=downloaders,
             plex_section=config.settings.plex["section"],
-            download_missing=playlist.download_missing
+            download_missing=playlist.download_missing,
+            collection=False
+        )
+
+    for collection in config.collections:
+        collection = config.playlists[collection]
+        schedule.every(collection.schedule).minutes.do(
+            download_playlist,
+            sp=sp,
+            url=collection.url,
+            plex_usernames=collection.sync_to_plex_users,
+            plex_server=plex_server,
+            cache_path=os.path.join(f"{env.config}/cache"),
+            playlists_path=config.settings.playlist,
+            download_path=settings.downloads,
+            beets=bt,
+            downloaders=downloaders,
+            plex_section=config.settings.plex["section"],
+            download_missing=collection.download_missing,
+            collection=True
         )
 
     schedule.run_all()
