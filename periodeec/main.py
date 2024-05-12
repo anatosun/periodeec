@@ -213,7 +213,8 @@ def download_playlist(sp: spotipy.Spotify,
     if not os.path.exists(owner_folder):
         os.makedirs(owner_folder)
 
-    playlist_path = os.path.join(f"{owner_folder}/{playlist_name}.json")
+    playlist_path = os.path.join(
+        f"{owner_folder}/{playlist_name.replace(os.path.sep, '')}.json")
 
     if os.path.exists(playlist_path):
         with open(playlist_path, "r") as f:
