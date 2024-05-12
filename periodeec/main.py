@@ -285,10 +285,6 @@ def download_playlist(sp: spotipy.Spotify,
             if plex_server.account().username != username:
                 plex_server = plex_server.switchUser(username)
 
-            if plex_server.playlist(title=title) is not None:
-                pl = plex_server.playlist(title=title)
-                pl.delete()
-
             pl = plex_server.createPlaylist(
                 title=title,
                 section=plex_section,
