@@ -404,7 +404,7 @@ def main():
             download_playlist,
             sp=sp,
             url=collection.url,
-            plex_usernames=collection.sync_to_plex_users,
+            plex_usernames=[],
             plex_server=plex_server,
             cache_path=os.path.join(f"{env.config}/cache"),
             playlists_path=config.settings.playlist,
