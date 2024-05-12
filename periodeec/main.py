@@ -399,7 +399,7 @@ def main():
         )
 
     for collection in config.collections:
-        collection = config.playlists[collection]
+        collection = config.collections[collection]
         schedule.every(collection.schedule).minutes.do(
             download_playlist,
             sp=sp,
