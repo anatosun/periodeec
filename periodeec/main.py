@@ -281,19 +281,33 @@ def download_playlist(sp: spotipy.Spotify,
 
     else:
 
-        for username in plex_usernames:
-            if plex_server.account().username != username:
-                plex_server = plex_server.switchUser(username)
+        admin = plex_server.account().username
+        pl_temp = plex_server.createPlaylist(
+            title=title + " (temp)",
+            section=plex_section,
+            m3ufilepath=m3u)
+        items = pl_temp.items()
+        delete = True
 
+        for username in plex_usernames:
+
+            if username == admin:
+                delete = False
+                continue
+
+            plex_server = plex_server.switchUser(username)
             pl = plex_server.createPlaylist(
                 title=title,
                 section=plex_section,
-                m3ufilepath=m3u)
+                items=items)
 
             pl.uploadPoster(url=poster)
             pl.editSummary(summary=summary)
             logging.info(f"created plex playlist '{title}'"
                          + f" for user '{username}'")
+
+            if delete:
+                pl_temp.delete()
 
     with open(playlist_path, "w") as f:
         json.dump(playlist, f)
