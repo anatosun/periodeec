@@ -271,6 +271,12 @@ def download_playlist(sp: spotipy.Spotify,
             section=plex_section,
             m3ufilepath=m3u)
         items = pl.items()
+        try:
+            cl = plex_server.library.section(plex_section).collections().get(
+                title=title)
+            cl.delete()
+        except Exception as e:
+            pass
         cl = plex_server.createCollection(
             title=title,
             items=items,
@@ -297,6 +303,13 @@ def download_playlist(sp: spotipy.Spotify,
                 continue
 
             plex_server = plex_server.switchUser(username)
+
+            try:
+                pl = plex_server.playlist(title=title)
+                pl.delete()
+            except Exception as e:
+                pass
+
             pl = plex_server.createPlaylist(
                 title=title,
                 section=plex_section,
