@@ -240,7 +240,7 @@ def download_playlist(sp: spotipy.Spotify,
                          beets=beets,
                          downloaders=downloaders)
 
-    logging.info(f"fetched {len(fetched)} tracks")
+    logging.info(f"fetched {len(fetched)}/{number_of_tracks} tracks")
 
     if len(fetched) == 0:
         return
