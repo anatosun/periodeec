@@ -40,7 +40,7 @@ def get_playlist_tracks(sp: spotipy.Spotify, playlist_link: str, playlist_name: 
         return []
 
     while len(playlist_tracks) < number_of_tracks:
-        time.sleep(random.uniform(1, 5))
+        time.sleep(random.uniform(3, 5))
         try:
             playlist_track_continued = sp.playlist_tracks(
                 playlist_link, limit=100, offset=len(playlist_tracks), fields="items(id,track(name,external_ids.isrc,href,album(name,id,href,external_urls.spotify,external_ids.upc)))")
@@ -72,6 +72,7 @@ def get_username_playlists(sp: spotipy.Spotify, username: str) -> list:
     playlists = user_playlists["items"]
 
     while len(playlists) < number_of_playlists:
+        time.sleep(random.uniform(3, 5))
         try:
             user_playlists = sp.user_playlists(
                 username, limit=50, offset=len(playlists))
