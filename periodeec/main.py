@@ -245,6 +245,8 @@ def download_playlist(sp: spotipy.Spotify,
     logging.info(f"fetched {len(fetched)}/{number_of_tracks} tracks")
 
     if len(fetched) == 0:
+        with open(playlist_path, "w") as f:
+            json.dump(playlist, f)
         return
     if title is None:
         title = playlist_name
@@ -303,15 +305,15 @@ def download_playlist(sp: spotipy.Spotify,
                 delete = False
                 continue
 
-            plex_server = plex_server.switchUser(username)
+            plex_server_username = plex_server.switchUser(username)
 
             try:
-                pl = plex_server.playlist(title=title)
+                pl = plex_server_username.playlist(title=title)
                 pl.delete()
             except Exception as e:
                 pass
 
-            pl = plex_server.createPlaylist(
+            pl = plex_server_username.createPlaylist(
                 title=title,
                 section=plex_section,
                 items=items)
@@ -323,6 +325,7 @@ def download_playlist(sp: spotipy.Spotify,
 
             if delete:
                 pl_temp.delete()
+                delete = False
 
     with open(playlist_path, "w") as f:
         json.dump(playlist, f)
