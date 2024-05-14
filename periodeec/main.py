@@ -339,8 +339,6 @@ def download_playlist(sp: spotipy.Spotify,
                 logging.error(
                     f"failed to create plex playlist '{title}': {e}")
 
-
-
     with open(playlist_path, "w") as f:
         json.dump(playlist, f)
 
@@ -350,22 +348,38 @@ def main():
     with open(os.path.join(f"{env.config}/config.yaml"), 'r') as stream:
         data = yaml.safe_load(stream)
 
-    playlists = {}
-    for name, playlist_data in data['playlists'].items():
-        playlists[name] = Playlist(**playlist_data)
+    if data.get('playlists') is None:
+        playlists = None
+    else:
+        playlists = {}
+        for name, playlist_data in data['playlists'].items():
+            playlists[name] = Playlist(**playlist_data)
 
-    collections = {}
-    for name, collection_data in data['collections'].items():
-        collections[name] = Collection(**collection_data)
+    if data.get('collections') is None:
+        collections = None
+    else:
+        collections = {}
+        for name, collection_data in data['collections'].items():
+            collections[name] = Collection(**collection_data)
 
-    usernames = {}
-    for username, user_data in data['usernames'].items():
-        usernames[username] = User(**user_data)
+    if data.get('usernames') is None:
+        usernames = None
+    else:
+        usernames = {}
+        for username, user_data in data['usernames'].items():
+            usernames[username] = User(**user_data)
+
+    if data.get('settings') is None:
+        logging.error(f"settings not found in {env.config}/config.yaml")
 
     settings_data = data['settings']
     settings = Settings(**settings_data)
 
-    config = Config(playlists, collections, usernames, settings)
+    config = Config(settings=settings,
+                    playlists=playlists,
+                    collections=collections,
+                    usernames=usernames)
+
     downloaders = {}
     for client in config.settings.clients:
         module = f"periodeec.modules.{client}"
@@ -380,59 +394,71 @@ def main():
                              token=config.settings.plex["token"])
     bt = beets.Beets(config.settings.music)
 
-    for user in config.usernames:
-        user = config.usernames[user]
-        schedule.every(user.schedule).minutes.do(
-            download_username,
-            sp=sp,
-            spotify_username=user.spotify_username,
-            plex_usernames=user.sync_to_plex_users,
-            plex_server=plex_server,
-            cache_path=os.path.join(env.config, "cache"),
-            playlists_path=config.settings.playlist,
-            download_path=settings.downloads,
-            beets=bt,
-            downloaders=downloaders,
-            download_missing=user.download_missing,
-            collection=False,
-            plex_section="Music"
-        )
+    if config.usernames is not None:
+        for user in config.usernames:
+            user = config.usernames[user]
+            schedule.every(user.schedule).minutes.do(
+                download_username,
+                sp=sp,
+                spotify_username=user.spotify_username,
+                plex_usernames=user.sync_to_plex_users,
+                plex_server=plex_server,
+                cache_path=os.path.join(env.config, "cache"),
+                playlists_path=os.path.join(
+                    f"{config.settings.music}/playlists"),
+                download_path=settings.downloads,
+                beets=bt,
+                downloaders=downloaders,
+                download_missing=user.download_missing,
+                collection=False,
+                plex_section="Music"
+            )
 
-    for playlist in config.playlists:
-        playlist = config.playlists[playlist]
-        schedule.every(playlist.schedule).minutes.do(
-            download_playlist,
-            sp=sp,
-            url=playlist.url,
-            plex_usernames=playlist.sync_to_plex_users,
-            plex_server=plex_server,
-            cache_path=os.path.join(f"{env.config}/cache"),
-            playlists_path=config.settings.playlist,
-            download_path=settings.downloads,
-            beets=bt,
-            downloaders=downloaders,
-            plex_section=config.settings.plex["section"],
-            download_missing=playlist.download_missing,
-            collection=False
-        )
+    if config.playlists is not None:
+        for playlist in config.playlists:
+            playlist = config.playlists[playlist]
+            schedule.every(playlist.schedule).minutes.do(
+                download_playlist,
+                sp=sp,
+                url=playlist.url,
+                plex_usernames=playlist.sync_to_plex_users,
+                plex_server=plex_server,
+                cache_path=os.path.join(f"{env.config}/cache"),
+                playlists_path=os.path.join(
+                    f"{config.settings.music}/playlists"),
+                download_path=settings.downloads,
+                beets=bt,
+                downloaders=downloaders,
+                plex_section=config.settings.plex["section"],
+                download_missing=playlist.download_missing,
+                collection=False,
+                title=playlist.title,
+                poster=playlist.poster,
+                summary=playlist.summary
+            )
 
-    for collection in config.collections:
-        collection = config.collections[collection]
-        schedule.every(collection.schedule).minutes.do(
-            download_playlist,
-            sp=sp,
-            url=collection.url,
-            plex_usernames=[],
-            plex_server=plex_server,
-            cache_path=os.path.join(f"{env.config}/cache"),
-            playlists_path=config.settings.playlist,
-            download_path=settings.downloads,
-            beets=bt,
-            downloaders=downloaders,
-            plex_section=config.settings.plex["section"],
-            download_missing=collection.download_missing,
-            collection=True
-        )
+    if config.collections is not None:
+        for collection in config.collections:
+            collection = config.collections[collection]
+            schedule.every(collection.schedule).minutes.do(
+                download_playlist,
+                sp=sp,
+                url=collection.url,
+                plex_usernames=[],
+                plex_server=plex_server,
+                cache_path=os.path.join(f"{env.config}/cache"),
+                playlists_path=os.path.join(
+                    f"{config.settings.music}/playlists"),
+                download_path=settings.downloads,
+                beets=bt,
+                downloaders=downloaders,
+                plex_section=config.settings.plex["section"],
+                download_missing=collection.download_missing,
+                collection=True,
+                title=collection.title,
+                poster=collection.poster,
+                summary=collection.summary
+            )
 
     schedule.run_all()
     while True:

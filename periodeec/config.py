@@ -2,7 +2,7 @@ import yaml
 
 
 class Config:
-    def __init__(self, playlists, collections, usernames, settings):
+    def __init__(self, settings, playlists=None, collections=None, usernames=None):
         self.playlists = playlists
         self.collections = collections
         self.usernames = usernames
@@ -10,32 +10,32 @@ class Config:
 
 
 class Playlist:
-    def __init__(self, url, sync_mode, name, sync_to_plex_users, summary, cover, download_missing, schedule):
+    def __init__(self, url, sync_mode=None, title=None, sync_to_plex_users=[], summary=None, poster=None, download_missing=False, schedule=1440):
         self.url = url
         self.sync_mode = sync_mode
-        self.name = name
+        self.title = title
         self.sync_to_plex_users = sync_to_plex_users
         self.summary = summary
-        self.cover = cover
+        self.poster = poster
         self.download_missing = download_missing
         self.schedule = int(schedule)
 
 
 class Collection:
-    def __init__(self, url, sync_mode, name, summary, cover, download_missing, schedule):
+    def __init__(self, url, sync_mode=None, title=None, summary=None, poster=None, download_missing=False, schedule=1440):
         self.url = url
         self.sync_mode = sync_mode
-        self.name = name
+        self.title = title
         self.summary = summary
-        self.cover = cover
-        self.download_missing = download_missing
+        self.poster = poster
+        self.download_missing = bool(download_missing)
         self.schedule = int(schedule)
 
 
 class User:
-    def __init__(self, spotify_username, sync_mode, sync_to_plex_users, download_missing, schedule):
+    def __init__(self, spotify_username, sync_mode=None, sync_to_plex_users=[], download_missing=False, schedule=1440):
         self.spotify_username = str(spotify_username)
-        self.sync_mode = str(sync_mode)
+        self.sync_mode = sync_mode
         self.sync_to_plex_users = list(sync_to_plex_users)
         self.download_missing = bool(download_missing)
         self.schedule = int(schedule)
