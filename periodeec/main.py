@@ -292,10 +292,17 @@ def download_playlist(sp: spotipy.Spotify,
     else:
 
         admin = plex_server.account().username
-        pl_temp = plex_server.createPlaylist(
-            title=title + " (temp)",
-            section=plex_section,
-            m3ufilepath=m3u)
+        try:
+            pl_temp = plex_server.createPlaylist(
+                title=title + " (temp)",
+                section=plex_section,
+                m3ufilepath=m3u)
+        except Exception as e:
+            logging.error(
+                f"failed to create plex playlist '{title}': {e}")
+            with open(playlist_path, "w") as f:
+                json.dump(playlist, f)
+                return
         items = pl_temp.items()
         delete = True
 
@@ -303,6 +310,8 @@ def download_playlist(sp: spotipy.Spotify,
 
             if username == admin:
                 delete = False
+                pl_temp.editTitle(title=title)
+                pl_temp.uploadPoster(url=poster)
                 continue
 
             plex_server_username = plex_server.switchUser(username)
@@ -311,21 +320,26 @@ def download_playlist(sp: spotipy.Spotify,
                 pl = plex_server_username.playlist(title=title)
                 pl.delete()
             except Exception as e:
-                pass
+                logging.error(
+                    f"failed to delete plex playlist '{title}': {e}")
 
-            pl = plex_server_username.createPlaylist(
-                title=title,
-                section=plex_section,
-                items=items)
+            try:
+                pl = plex_server_username.createPlaylist(
+                    title=title,
+                    section=plex_section,
+                    items=items)
+                pl.uploadPoster(url=poster)
+                pl.editSummary(summary=summary)
+                logging.info(f"created plex playlist '{title}'"
+                             + f" for user '{username}'")
+                if delete:
+                    pl_temp.delete()
+                    delete = False
+            except Exception as e:
+                logging.error(
+                    f"failed to create plex playlist '{title}': {e}")
 
-            pl.uploadPoster(url=poster)
-            pl.editSummary(summary=summary)
-            logging.info(f"created plex playlist '{title}'"
-                         + f" for user '{username}'")
 
-            if delete:
-                pl_temp.delete()
-                delete = False
 
     with open(playlist_path, "w") as f:
         json.dump(playlist, f)
