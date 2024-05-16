@@ -314,8 +314,12 @@ def download_playlist(sp: spotipy.Spotify,
 
             if username == admin:
                 delete = False
-                pl_temp.editTitle(title=title)
-                pl_temp.uploadPoster(url=poster)
+                try:
+                    pl_temp.editTitle(title=title)
+                    pl_temp.uploadPoster(url=poster)
+                except Exception as e:
+                    logging.error(
+                        f"failed to edit plex playlist '{title}': {e}")
                 continue
 
             plex_server_username = plex_server.switchUser(username)
