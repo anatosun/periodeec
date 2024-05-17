@@ -19,9 +19,11 @@ import importlib
 @dataclass
 class Environment:
     config: str
+    run: bool
 
 
-env = Environment(os.getenv("CONFIG", "/config"))
+env = Environment(os.getenv("PD_CONFIG", "/config"),
+                  bool(os.getenv("PD_RUN", False)))
 
 
 logging.basicConfig(
@@ -466,7 +468,9 @@ def main():
                 summary=collection.summary
             )
 
-    schedule.run_all()
+    if env.run:
+        schedule.run_all()
+
     while True:
         schedule.run_pending()
         time.sleep(1)
