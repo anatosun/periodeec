@@ -158,7 +158,7 @@ def download_username(sp: spotipy.Spotify,
                       spotify_username: str,
                       plex_usernames: list,
                       plex_server: PlexServer,
-                      playlists_path: str,
+                      m3u_path: str,
                       cache_path: str,
                       download_path: str,
                       beets: beets.Beets,
@@ -178,7 +178,7 @@ def download_username(sp: spotipy.Spotify,
                           url=url,
                           plex_usernames=plex_usernames,
                           plex_server=plex_server,
-                          playlists_path=playlists_path,
+                          m3u_path=m3u_path,
                           cache_path=cache_path,
                           download_path=download_path,
                           beets=beets,
@@ -192,7 +192,7 @@ def download_playlist(sp: spotipy.Spotify,
                       url: str,
                       plex_usernames: list,
                       plex_server: PlexServer,
-                      playlists_path: str,
+                      m3u_path: str,
                       cache_path: str,
                       download_path: str,
                       beets: beets.Beets,
@@ -259,31 +259,36 @@ def download_playlist(sp: spotipy.Spotify,
     if summary is None:
         summary = playlist["description"]
 
-    if not os.path.exists(playlists_path):
-        os.makedirs(playlists_path)
-
-    m3u = os.path.join(
-        f"{playlists_path}/{playlist_id}{'_collection' if collection else ''}.m3u")
-    m3u = os.path.abspath(m3u)
-    with open(m3u, "w") as f:
-        f.write("#EXTM3U\n")
-        for track, path in fetched:
-            f.write(f"#EXTINF:0,{track}\n")
-            f.write(f"{path}\n")
-
     if collection:
+
+        m3u_path = os.path.join(f"{m3u_path}/collections")
+        m3u_path = os.path.abspath(m3u_path)
+
+        if not os.path.exists(m3u_path):
+            os.makedirs(m3u_path)
+
+        m3u_path = os.path.join(f"{m3u_path}/{playlist_id}.m3u")
+
+        with open(m3u_path, "w") as f:
+            f.write("#EXTM3U\n")
+            for track, path in fetched:
+                f.write(f"#EXTINF:0,{track}\n")
+                f.write(f"{path}\n")
 
         pl = plex_server.createPlaylist(
             title=title+" (temp)",
             section=plex_section,
-            m3ufilepath=m3u)
+            m3ufilepath=m3u_path)
+
         items = pl.items()
+
         try:
-            cl = plex_server.library.section(plex_section).collections().get(
-                title=title)
+            cl = plex_server.library.section(
+                plex_section).collection(title=title)
             cl.delete()
         except Exception as e:
-            pass
+            logging.error(
+                f"failed to delete plex collection '{title}': {e}")
         cl = plex_server.createCollection(
             title=title,
             items=items,
@@ -292,60 +297,79 @@ def download_playlist(sp: spotipy.Spotify,
         cl.uploadPoster(url=poster)
         cl.editSummary(summary=summary)
         logging.info(f"created plex collection '{title}'")
+        with open(playlist_path, "w") as f:
+            json.dump(playlist, f)
 
-    else:
+        return
 
-        admin = plex_server.account().username
+    admin = plex_server.account().username
+
+    for username in plex_usernames:
+
+        m3u_path_username = os.path.join(f"{m3u_path}/playlists/{username}")
+        m3u_path_username = os.path.abspath(m3u_path)
+
+        if not os.path.exists(m3u_path):
+            os.makedirs(m3u_path)
+
+        m3u_path_username = os.path.join(
+            f"{m3u_path_username}/{playlist_id}.m3u")
+
+        with open(m3u_path_username, "w") as f:
+            f.write("#EXTM3U\n")
+            for track, path in fetched:
+                f.write(f"#EXTINF:0,{track}\n")
+                f.write(f"{path}\n")
+
         try:
             pl_temp = plex_server.createPlaylist(
                 title=title + " (temp)",
                 section=plex_section,
-                m3ufilepath=m3u)
+                m3ufilepath=m3u_path_username)
+            items = pl_temp.items()
         except Exception as e:
             logging.error(
                 f"failed to create plex playlist '{title}': {e}")
             with open(playlist_path, "w") as f:
                 json.dump(playlist, f)
                 return
-        items = pl_temp.items()
-        delete = True
 
-        for username in plex_usernames:
+        plex_server_username = plex_server.switchUser(username)
+
+        try:
+            pl = plex_server_username.playlist(title=title)
+            pl.delete()
+        except Exception as e:
+            logging.error(
+                f"failed to delete plex playlist '{title}': {e}")
+
+        try:
+            pl = plex_server_username.createPlaylist(
+                title=title,
+                section=plex_section,
+                items=items)
+            pl.uploadPoster(url=poster)
+            pl.editSummary(summary=summary)
+            logging.info(f"created plex playlist '{title}'"
+                         + f" for user '{username}'")
 
             if username == admin:
-                delete = False
                 try:
                     pl_temp.editTitle(title=title)
                     pl_temp.uploadPoster(url=poster)
                 except Exception as e:
                     logging.error(
                         f"failed to edit plex playlist '{title}': {e}")
-                continue
-
-            plex_server_username = plex_server.switchUser(username)
-
-            try:
-                pl = plex_server_username.playlist(title=title)
-                pl.delete()
-            except Exception as e:
-                logging.error(
-                    f"failed to delete plex playlist '{title}': {e}")
-
-            try:
-                pl = plex_server_username.createPlaylist(
-                    title=title,
-                    section=plex_section,
-                    items=items)
-                pl.uploadPoster(url=poster)
-                pl.editSummary(summary=summary)
-                logging.info(f"created plex playlist '{title}'"
-                             + f" for user '{username}'")
-                if delete:
+            else:
+                try:
                     pl_temp.delete()
-                    delete = False
-            except Exception as e:
-                logging.error(
-                    f"failed to create plex playlist '{title}': {e}")
+                except Exception as e:
+                    logging.error(
+                        f"failed to delete plex playlist '{title}': {e}")
+
+        except Exception as e:
+            logging.error(
+                f"failed to create plex playlist '{title}': {e}")
 
     with open(playlist_path, "w") as f:
         json.dump(playlist, f)
@@ -412,8 +436,7 @@ def main():
                 plex_usernames=user.sync_to_plex_users,
                 plex_server=plex_server,
                 cache_path=os.path.join(env.config, "cache"),
-                playlists_path=os.path.join(
-                    f"{config.settings.music}/playlists"),
+                m3u_path=os.path.join(f"{config.settings.music}/m3u"),
                 download_path=settings.downloads,
                 beets=bt,
                 downloaders=downloaders,
@@ -432,8 +455,7 @@ def main():
                 plex_usernames=playlist.sync_to_plex_users,
                 plex_server=plex_server,
                 cache_path=os.path.join(f"{env.config}/cache"),
-                playlists_path=os.path.join(
-                    f"{config.settings.music}/playlists"),
+                m3u_path=os.path.join(f"{config.settings.music}/m3u"),
                 download_path=settings.downloads,
                 beets=bt,
                 downloaders=downloaders,
@@ -455,8 +477,7 @@ def main():
                 plex_usernames=[],
                 plex_server=plex_server,
                 cache_path=os.path.join(f"{env.config}/cache"),
-                playlists_path=os.path.join(
-                    f"{config.settings.music}/playlists"),
+                m3u_path=os.path.join(f"{config.settings.music}/m3u"),
                 download_path=settings.downloads,
                 beets=bt,
                 downloaders=downloaders,
