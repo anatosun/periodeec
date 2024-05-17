@@ -334,7 +334,10 @@ def download_playlist(sp: spotipy.Spotify,
                 json.dump(playlist, f)
                 return
 
-        plex_server_username = plex_server.switchUser(username)
+        if username != admin:
+            plex_server_username = plex_server.switchUser(username)
+        else:
+            plex_server_username = plex_server
 
         try:
             pl = plex_server_username.playlist(title=title)
