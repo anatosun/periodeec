@@ -342,6 +342,8 @@ def download_playlist(sp: spotipy.Spotify,
             try:
                 pl_temp.editTitle(title=title)
                 pl_temp.uploadPoster(url=poster)
+                logging.info(f"created plex playlist '{title}'"
+                             + f" for user '{username}'")
             except Exception as e:
                 logging.error(
                     f"failed to edit plex playlist '{title}': {e}")
