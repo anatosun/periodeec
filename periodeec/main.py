@@ -306,7 +306,7 @@ def download_playlist(sp: spotipy.Spotify,
 
         return
 
-    admin = plex_server.account().username
+    plex_server_username = plex_server
 
     for username in plex_usernames:
 
@@ -326,11 +326,13 @@ def download_playlist(sp: spotipy.Spotify,
                 f.write(f"{path}\n")
 
         try:
+
             pl_temp = plex_server.createPlaylist(
-                title=title + " (temp)",
+                title=title,
                 section=plex_section,
                 m3ufilepath=m3u_path_username)
             items = pl_temp.items()
+
         except Exception as e:
             logging.error(
                 f"failed to create plex playlist '{title}': {e}")
@@ -338,17 +340,26 @@ def download_playlist(sp: spotipy.Spotify,
                 json.dump(playlist, f)
                 return
 
-        if username == admin:
+        if username != plex_server_username.account().username:
             try:
-                pl_temp.editTitle(title=title)
-                pl_temp.uploadPoster(url=poster)
-                logging.info(f"created plex playlist '{title}'"
-                             + f" for user '{username}'")
+                plex_server_username = plex_server.switchUser(username)
             except Exception as e:
                 logging.error(
-                    f"failed to edit plex playlist '{title}': {e}")
-        else:
-            plex_server_username = plex_server.switchUser(username)
+                    f"failed to switch to plex user '{username}': {e}")
+                continue
+
+        try:
+
+            pl = plex_server_username.playlist(title=title)
+            if pl_temp.ratingKey != pl.ratingKey:
+                pl.removeItems(pl.items())
+                pl.addItems(items)
+            pl.uploadPoster(url=poster)
+            pl.editSummary(summary=summary)
+            logging.info(f"edited plex playlist '{title}' for '{username}'")
+
+        except Exception as e:
+
             try:
                 pl = plex_server_username.createPlaylist(
                     title=title,
@@ -356,17 +367,22 @@ def download_playlist(sp: spotipy.Spotify,
                     items=items)
                 pl.uploadPoster(url=poster)
                 pl.editSummary(summary=summary)
-                logging.info(f"created plex playlist '{title}'"
-                             + f" for user '{username}'")
+                logging.info(f"created plex playlist" +
+                             "'{title}' for '{username}'")
+
             except Exception as e:
                 logging.error(
                     f"failed to create plex playlist '{title}': {e}")
+                with open(playlist_path, "w") as f:
+                    json.dump(playlist, f)
+                return
 
-            try:
+        try:
+            if pl_temp.ratingKey != pl.ratingKey:
                 pl_temp.delete()
-            except Exception as e:
-                logging.error(
-                    f"failed to delete plex temp playlist '{title}': {e}")
+        except Exception as e:
+            logging.error(
+                f"failed to delete temporary plex playlist '{title}': {e}")
 
     with open(playlist_path, "w") as f:
         json.dump(playlist, f)
