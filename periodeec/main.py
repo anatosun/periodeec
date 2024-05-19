@@ -313,8 +313,8 @@ def download_playlist(sp: spotipy.Spotify,
         m3u_path_username = os.path.join(f"{m3u_path}/playlists/{username}")
         m3u_path_username = os.path.abspath(m3u_path_username)
 
-        if not os.path.exists(m3u_path):
-            os.makedirs(m3u_path)
+        if not os.path.exists(m3u_path_username):
+            os.makedirs(m3u_path_username)
 
         m3u_path_username = os.path.join(
             f"{m3u_path_username}/{playlist_id}.m3u")
