@@ -246,12 +246,15 @@ def download_playlist(sp: spotipy.Spotify,
                          beets=beets,
                          downloaders=downloaders)
 
-    logging.info(f"fetched {len(fetched)}/{number_of_tracks} tracks")
-
     if len(fetched) == 0:
         with open(playlist_path, "w") as f:
             json.dump(playlist, f)
+
+        logging.info(f"skipped playlist '{playlist_name}': no tracks found")
         return
+
+    logging.info(f"fetched {len(fetched)}/{number_of_tracks} tracks")
+
     if title is None:
         title = playlist_name
     if poster is None:
@@ -297,6 +300,7 @@ def download_playlist(sp: spotipy.Spotify,
         cl.uploadPoster(url=poster)
         cl.editSummary(summary=summary)
         logging.info(f"created plex collection '{title}'")
+
         with open(playlist_path, "w") as f:
             json.dump(playlist, f)
 
@@ -307,7 +311,7 @@ def download_playlist(sp: spotipy.Spotify,
     for username in plex_usernames:
 
         m3u_path_username = os.path.join(f"{m3u_path}/playlists/{username}")
-        m3u_path_username = os.path.abspath(m3u_path)
+        m3u_path_username = os.path.abspath(m3u_path_username)
 
         if not os.path.exists(m3u_path):
             os.makedirs(m3u_path)
@@ -334,45 +338,33 @@ def download_playlist(sp: spotipy.Spotify,
                 json.dump(playlist, f)
                 return
 
-        if username != admin:
-            plex_server_username = plex_server.switchUser(username)
+        if username == admin:
+            try:
+                pl_temp.editTitle(title=title)
+                pl_temp.uploadPoster(url=poster)
+            except Exception as e:
+                logging.error(
+                    f"failed to edit plex playlist '{title}': {e}")
         else:
-            plex_server_username = plex_server
+            plex_server_username = plex_server.switchUser(username)
+            try:
+                pl = plex_server_username.createPlaylist(
+                    title=title,
+                    section=plex_section,
+                    items=items)
+                pl.uploadPoster(url=poster)
+                pl.editSummary(summary=summary)
+                logging.info(f"created plex playlist '{title}'"
+                             + f" for user '{username}'")
+            except Exception as e:
+                logging.error(
+                    f"failed to create plex playlist '{title}': {e}")
 
-        try:
-            pl = plex_server_username.playlist(title=title)
-            pl.delete()
-        except Exception as e:
-            logging.error(
-                f"failed to delete plex playlist '{title}': {e}")
-
-        try:
-            pl = plex_server_username.createPlaylist(
-                title=title,
-                section=plex_section,
-                items=items)
-            pl.uploadPoster(url=poster)
-            pl.editSummary(summary=summary)
-            logging.info(f"created plex playlist '{title}'"
-                         + f" for user '{username}'")
-
-            if username == admin:
-                try:
-                    pl_temp.editTitle(title=title)
-                    pl_temp.uploadPoster(url=poster)
-                except Exception as e:
-                    logging.error(
-                        f"failed to edit plex playlist '{title}': {e}")
-            else:
-                try:
-                    pl_temp.delete()
-                except Exception as e:
-                    logging.error(
-                        f"failed to delete plex playlist '{title}': {e}")
-
-        except Exception as e:
-            logging.error(
-                f"failed to create plex playlist '{title}': {e}")
+            try:
+                pl_temp.delete()
+            except Exception as e:
+                logging.error(
+                    f"failed to delete plex temp playlist '{title}': {e}")
 
     with open(playlist_path, "w") as f:
         json.dump(playlist, f)
