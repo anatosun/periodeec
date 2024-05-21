@@ -306,6 +306,7 @@ def download_playlist(sp: spotipy.Spotify,
 
         return
 
+    admin = plex_server.account().username
     plex_server_username = plex_server
 
     for username in plex_usernames:
@@ -351,7 +352,7 @@ def download_playlist(sp: spotipy.Spotify,
         try:
 
             pl = plex_server_username.playlist(title=title)
-            if pl_temp.ratingKey != pl.ratingKey:
+            if username != admin:
                 pl.removeItems(pl.items())
                 pl.addItems(items)
             pl.uploadPoster(url=poster)
@@ -378,7 +379,7 @@ def download_playlist(sp: spotipy.Spotify,
                 return
 
         try:
-            if pl_temp.ratingKey != pl.ratingKey:
+            if username != admin:
                 pl_temp.delete()
         except Exception as e:
             logging.error(
