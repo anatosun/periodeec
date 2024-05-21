@@ -341,13 +341,13 @@ def download_playlist(sp: spotipy.Spotify,
                 json.dump(playlist, f)
                 return
 
-        if username != plex_server_username.account().username:
-            try:
+        try:
+            if username != plex_server_username.myPlexUsername:
                 plex_server_username = plex_server.switchUser(username)
-            except Exception as e:
-                logging.error(
-                    f"failed to switch to plex user '{username}': {e}")
-                continue
+        except Exception as e:
+            logging.error(
+                f"failed to switch to plex user '{username}': {e}")
+            continue
 
         try:
 
