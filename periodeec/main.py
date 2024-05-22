@@ -370,7 +370,7 @@ def download_playlist(sp: spotipy.Spotify,
                 pl.uploadPoster(url=poster)
                 pl.editSummary(summary=summary)
                 logging.info(f"created plex playlist" +
-                             "'{title}' for '{username}'")
+                             f" '{title}' for '{username}'")
 
             except Exception as e:
                 logging.error(
