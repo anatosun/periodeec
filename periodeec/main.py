@@ -1,4 +1,6 @@
 from dataclasses import dataclass
+import re
+import html
 
 from plexapi import media
 from plexapi.audio import Track
@@ -261,6 +263,8 @@ def download_playlist(sp: spotipy.Spotify,
         poster = playlist["images"][0]["url"]
     if summary is None:
         summary = playlist["description"]
+        summary = re.sub("""(<a href="(.*?)">)|(</a>)""", "", summary)
+        summary = html.unescape(summary)
 
     if collection:
 
