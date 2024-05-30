@@ -85,6 +85,7 @@ def get_username_playlists(sp: spotipy.Spotify, username: str) -> list:
             logging.error(
                 f"error getting '{username} playlists at offset {len(playlists)}: {e}")
 
+    logging.info(f"parsed {len(playlists)}/{number_of_playlists} playlists for user {username}")
     return playlists
 
 
