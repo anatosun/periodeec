@@ -131,7 +131,7 @@ def get_tracks(sp: spotipy.Spotify, tracks: list, download_missing: bool, downlo
                 logging.debug(f"queuing {album_name} in {dl}")
                 success, path, err = downloader.enqueue(
                     path=download_path,
-                    isrcs=isrc,
+                    isrc=isrc,
                     link=album_link)
 
                 if not success:
