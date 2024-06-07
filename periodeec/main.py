@@ -97,7 +97,6 @@ def get_tracks(sp: spotipy.Spotify, tracks: list, download_missing: bool, downlo
         track_name = track["track"]["name"]
         isrc = track["track"]["external_ids"].get("isrc")
         album = track["track"]["album"]
-        album_id = album["id"]
         album_link = album["external_urls"].get("spotify")
         album_name = album["name"]
 
@@ -220,7 +219,6 @@ def download_playlist(sp: spotipy.Spotify,
     playlist_link = playlist["external_urls"]["spotify"]
     number_of_tracks = playlist["tracks"]["total"]
     playlist_name = playlist["name"]
-    owner = playlist["owner"]["id"]
     snapshot_id = playlist["snapshot_id"]
 
     playlists_folder = os.path.join(f"{cache_path}/playlists")
