@@ -1,9 +1,6 @@
 from dataclasses import dataclass
 import re
 import html
-
-from plexapi import media
-from plexapi.audio import Track
 from periodeec.config import Config, Collection, Playlist, Settings, User
 import yaml
 import logging
