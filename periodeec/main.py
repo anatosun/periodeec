@@ -85,7 +85,8 @@ def get_username_playlists(sp: spotipy.Spotify, username: str) -> list:
             logging.error(
                 f"error getting '{username} playlists at offset {len(playlists)}: {e}")
 
-    logging.info(f"parsed {len(playlists)}/{number_of_playlists} playlists for user {username}")
+    logging.info(
+        f"parsed {len(playlists)}/{number_of_playlists} playlists for user {username}")
     return playlists
 
 
@@ -118,42 +119,43 @@ def get_tracks(sp: spotipy.Spotify, tracks: list, download_missing: bool, downlo
             fetched.append((track_name, path))
             continue
 
-        success = False
-        err = ""
-        path = ""
-
         if download_missing:
-            if downloaders.get("deemix") is not None:
-                deemix = downloaders["deemix"]
-                logging.debug(
-                    f"queuing {album_name} in Deemix")
-                success, path, err = deemix.enqueue(download_path, isrc)
 
-            if not success:
+            if len(downloaders) == 0:
                 logging.error(
-                    f"failed to download album {album_name} in Deemix: {err}")
-                continue
+                    "failed to download missing tracks: no downloaders found")
+                return fetched
 
-            if not os.path.exists(path):
-                logging.error(
-                    f"failed to download album {album_name}: directory {path} doesn't exist")
-                continue
+            for dl in downloaders:
+                downloader = downloaders[dl]
+                logging.debug(f"queuing {album_name} in {dl}")
+                success, path, err = downloader.enqueue(download_path, isrc)
 
-            with open(os.path.join(path, "spotify.json"), "w") as f:
-                json.dump(album, f)
+                if not success:
+                    logging.error(
+                        f"failed to download album {album_name} in {dl}: {err}")
+                    continue
 
-            success, e = beets.add(path=path, search_id=album_link)
+                if not os.path.exists(path):
+                    logging.error(
+                        f"failed to download album {album_name}: directory {path} doesn't exist")
+                    continue
 
-            if success:
-                logging.info(
-                    f"added {album_name} to beets library")
-                exists, path = beets.exists(isrc)
-                if exists:
-                    fetched.append((track_name, path))
-                continue
-            else:
-                logging.error(
-                    f"failed to add {album_name} to beets library: {e}")
+                with open(os.path.join(path, "spotify.json"), "w") as f:
+                    json.dump(album, f)
+
+                success, e = beets.add(path=path, search_id=album_link)
+
+                if success:
+                    logging.info(
+                        f"added {album_name} to beets library")
+                    exists, path = beets.exists(isrc)
+                    if exists:
+                        fetched.append((track_name, path))
+                    break
+                else:
+                    logging.error(
+                        f"failed to add {album_name} to beets library: {e}")
     return fetched
 
 
