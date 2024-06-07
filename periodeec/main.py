@@ -211,12 +211,15 @@ def download_playlist(sp: spotipy.Spotify,
                       poster=None,
                       summary=None,
                       plex_section="Music") -> None:
+
     playlist_id = url.split("/")[-1]
+
     try:
         playlist = sp.playlist(playlist_id=playlist_id)
     except Exception as e:
         logging.error(f"skipping playlist '{playlist_id}': {e}")
         return
+
     playlist_link = playlist["external_urls"]["spotify"]
     number_of_tracks = playlist["tracks"]["total"]
     playlist_name = playlist["name"]
