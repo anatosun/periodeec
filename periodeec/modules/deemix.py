@@ -119,7 +119,7 @@ class Deemix:
         else:
             return os.path.join(os.path.abspath("./"), config_folder)
 
-    def enqueue(self, path: str, isrc=None) -> tuple[bool, str, str]:
+    def enqueue(self, path: str, isrc=None, link=None) -> tuple[bool, str, str]:
         try:
             link = f"https://api.deezer.com/2.0/track/isrc:{isrc}"
             response = self.session.get(link)

@@ -129,7 +129,10 @@ def get_tracks(sp: spotipy.Spotify, tracks: list, download_missing: bool, downlo
             for dl in downloaders:
                 downloader = downloaders[dl]
                 logging.debug(f"queuing {album_name} in {dl}")
-                success, path, err = downloader.enqueue(download_path, isrc)
+                success, path, err = downloader.enqueue(
+                    path=download_path,
+                    isrcs=isrc,
+                    link=album_link)
 
                 if not success:
                     logging.error(
@@ -439,7 +442,10 @@ def main():
         module = f"periodeec.modules.{client}"
         class_ = getattr(importlib.import_module(
             module), f"{client}".capitalize())
-        instance = class_(**config.settings.clients[client])
+        if config.settings.clients[client] is None:
+            instance = class_()
+        else:
+            instance = class_(**config.settings.clients[client])
         downloaders[client] = instance
 
     ccm = spotipy.SpotifyClientCredentials(**config.settings.spotify)
