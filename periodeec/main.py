@@ -158,6 +158,7 @@ def get_tracks(sp: spotipy.Spotify, tracks: list, download_missing: bool, downlo
                 else:
                     logging.error(
                         f"failed to add {album_name} to beets library: {e}")
+                    continue
     return fetched
 
 
