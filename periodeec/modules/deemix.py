@@ -120,6 +120,11 @@ class Deemix:
             return os.path.join(os.path.abspath("./"), config_folder)
 
     def enqueue(self, path: str, isrc=None, link=None) -> tuple[bool, str, str]:
+
+        id = str(link).split("/")[-1]
+        path = os.path.join(path, id+"_deemix")
+        if not os.path.exists(path):
+            os.makedirs(path)
         try:
             link = f"https://api.deezer.com/2.0/track/isrc:{isrc}"
             response = self.session.get(link)
@@ -170,6 +175,6 @@ class Deemix:
         album_path = os.path.join(path, str(id))
         errors = os.path.join(album_path, "errors.txt")
         if os.path.exists(errors):
-            return False, album_path, f"check {errors} for more details"
+            return False, path, f"check {errors} for more details"
 
-        return True, album_path, ""
+        return True, path, ""

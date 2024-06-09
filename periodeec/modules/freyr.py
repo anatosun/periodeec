@@ -10,7 +10,7 @@ class Freyr:
     def enqueue(self, path: str, isrc=None, link=None) -> tuple[bool, str, str]:
 
         id = str(link).split("/")[-1]
-        path = os.path.join(path, id)
+        path = os.path.join(path, id+"_freyr")
         if not os.path.exists(path):
             os.makedirs(path)
 

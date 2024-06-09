@@ -25,7 +25,7 @@ class Qobuz:
         link = track["album"]['url']
 
         id = str(link).split("/")[-1]
-        path = os.path.join(path, id)
+        path = os.path.join(path, id+"_qobuz")
         if not os.path.exists(path):
             os.makedirs(path)
 
