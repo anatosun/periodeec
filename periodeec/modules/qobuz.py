@@ -1,0 +1,37 @@
+import os
+import subprocess
+from qobuz_dl.core import QobuzDL
+
+
+class Qobuz:
+
+    def __init__(self, email, password):
+        self.qobuz = QobuzDL()
+        self.qobuz.get_tokens()
+        self.qobuz.initialize_client(
+            email, password, self.qobuz.app_id, self.qobuz.secrets)
+
+    def enqueue(self, path: str, isrc=None, link=None) -> tuple[bool, str, str]:
+
+        results = self.qobuz.search_by_type(
+            query=isrc, item_type="track", lucky=True)
+
+        if results is None or len(results) == 0:
+            return False, "", f"could not find {isrc} on qobuz"
+
+        link = results[0]
+        track_id = str(link).split("/")[-1]
+        track = self.qobuz.client.get_track_meta(track_id)
+        link = track["album"]['url']
+
+        id = str(link).split("/")[-1]
+        path = os.path.join(path, id)
+        if not os.path.exists(path):
+            os.makedirs(path)
+
+        try:
+            self.qobuz.download_from_id(item_id=id, album=True, alt_path=path)
+        except Exception as e:
+            return False, path, f"qobuz returned a non-zero exit code when processing {link} with isrc={isrc}"
+
+        return True, path, ""
