@@ -355,7 +355,7 @@ def download_playlist(sp: spotipy.Spotify,
                 plex_server_username = plex_server.switchUser(username)
         except Exception as e:
             logging.error(
-                f"failed to switch to plex user '{username}': {e}")
+                "failed to switch to plex user '{username}': {e}")
             pl_temp.delete()
             continue
 
