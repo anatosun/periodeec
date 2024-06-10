@@ -34,7 +34,7 @@ logging.basicConfig(
 def get_playlist_tracks(sp: spotipy.Spotify, playlist_link: str, playlist_name: str, number_of_tracks: int) -> list:
     try:
         playlist_tracks = sp.playlist_tracks(
-            playlist_link, limit=100, offset=0, fields="items(id,track(name,external_ids.isrc,href,album(name,id,href,external_urls.spotify,external_ids.upc)))")
+            playlist_link, limit=100, offset=0, fields="items(id,track(name,external_ids.isrc,href,album(name,id,href,external_urls.spotify,external_ids.upc,artists(name,id))))")
         playlist_tracks = playlist_tracks["items"]
     except Exception as e:
         logging.error(f"skipping playlist '{playlist_name}': {e}")
@@ -44,7 +44,7 @@ def get_playlist_tracks(sp: spotipy.Spotify, playlist_link: str, playlist_name: 
         time.sleep(random.uniform(3, 5))
         try:
             playlist_track_continued = sp.playlist_tracks(
-                playlist_link, limit=100, offset=len(playlist_tracks), fields="items(id,track(name,external_ids.isrc,href,album(name,id,href,external_urls.spotify,external_ids.upc),artists(name,id)))")
+                playlist_link, limit=100, offset=len(playlist_tracks), fields="items(id,track(name,external_ids.isrc,href,album(name,id,href,external_urls.spotify,external_ids.upc,artists(name,id))))")
             playlist_tracks.extend(playlist_track_continued["items"])
         except Exception as e:
             logging.error(
