@@ -14,10 +14,12 @@ class Qobuz:
 
         results = self.qobuz.search_by_type(
             query=isrc, item_type="track", lucky=True)
+        track_mode = True
 
         if results is None or len(results) == 0:
             results = self.qobuz.search_by_type(
                 query=fallback_album_query, item_type="album", lucky=True)
+            track_mode = False
 
         if results is None or len(results) == 0:
             results = self.qobuz.search_by_type(
@@ -26,9 +28,10 @@ class Qobuz:
             return False, "", f"could not find {isrc} on qobuz"
 
         link = results[0]
-        track_id = str(link).split("/")[-1]
-        track = self.qobuz.client.get_track_meta(track_id)
-        link = track["album"]['url']
+        if track_mode:
+            track_id = str(link).split("/")[-1]
+            track = self.qobuz.client.get_track_meta(track_id)
+            link = track["album"]['url']
 
         id = str(link).split("/")[-1]
         path = os.path.join(path, id+"_qobuz")
