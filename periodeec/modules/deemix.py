@@ -119,7 +119,7 @@ class Deemix:
         else:
             return os.path.join(os.path.abspath("./"), config_folder)
 
-    def enqueue(self, path: str, isrc=None, link=None) -> tuple[bool, str, str]:
+    def enqueue(self, path: str, isrc=None, link=None, fallback_album_query=None) -> tuple[bool, str, str]:
 
         id = str(link).split("/")[-1]
         path = os.path.join(path, id+"_deemix")

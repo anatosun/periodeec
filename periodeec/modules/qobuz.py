@@ -10,12 +10,19 @@ class Qobuz:
         self.qobuz.initialize_client(
             email, password, self.qobuz.app_id, self.qobuz.secrets)
 
-    def enqueue(self, path: str, isrc=None, link=None) -> tuple[bool, str, str]:
+    def enqueue(self, path: str, isrc=None, link=None, fallback_album_query=None) -> tuple[bool, str, str]:
 
         results = self.qobuz.search_by_type(
             query=isrc, item_type="track", lucky=True)
 
         if results is None or len(results) == 0:
+            results = self.qobuz.search_by_type(
+                query=fallback_album_query, item_type="album", lucky=True)
+
+        if results is None or len(results) == 0:
+            results = self.qobuz.search_by_type(
+                query=fallback_album_query, item_type="album", lucky=True)
+
             return False, "", f"could not find {isrc} on qobuz"
 
         link = results[0]
