@@ -22,10 +22,7 @@ class Qobuz:
             track_mode = False
 
         if results is None or len(results) == 0:
-            results = self.qobuz.search_by_type(
-                query=fallback_album_query, item_type="album", lucky=True)
-
-            return False, "", f"could not find {isrc} on qobuz"
+            return False, "", f"could not find {isrc} on qobuz nor with fallback query {fallback_album_query}"
 
         link = results[0]
         if track_mode:
