@@ -13,6 +13,8 @@ import periodeec.beets as beets
 import schedule
 from plexapi.server import PlexServer
 import importlib
+import colorama
+colorama.init(strip=True, convert=False)
 
 
 @dataclass

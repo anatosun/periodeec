@@ -6,3 +6,4 @@ beets-filetote
 tidal-dl
 deemix
 qobuz-dl
+colorama
