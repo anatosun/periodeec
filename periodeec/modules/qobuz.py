@@ -5,7 +5,7 @@ from qobuz_dl.core import QobuzDL
 class Qobuz:
 
     def __init__(self, email, password):
-        self.qobuz = QobuzDL(quality=27)
+        self.qobuz = QobuzDL(quality=27, embed_art=True, cover_og_quality=True)
         self.qobuz.get_tokens()
         self.qobuz.initialize_client(
             email, password, self.qobuz.app_id, self.qobuz.secrets)
