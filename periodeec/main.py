@@ -175,7 +175,6 @@ def download_username(sp: spotipy.Spotify,
                       beets: beets.Beets,
                       downloaders: dict,
                       download_missing=True,
-                      collection=False,
                       plex_section="Music") -> None:
 
     playlists = get_username_playlists(
@@ -195,8 +194,124 @@ def download_username(sp: spotipy.Spotify,
                           beets=beets,
                           downloaders=downloaders,
                           download_missing=download_missing,
-                          collection=collection,
                           plex_section=plex_section)
+
+def download_collection(sp: spotipy.Spotify,
+                      url: str,
+                      plex_server: PlexServer,
+                      m3u_path: str,
+                      cache_path: str,
+                      download_path: str,
+                      beets: beets.Beets,
+                      downloaders: dict,
+                      download_missing=True,
+                      title=None,
+                      poster=None,
+                      summary=None,
+                      plex_section="Music") -> None:
+
+    playlist_id = url.split("/")[-1]
+
+    try:
+        playlist = sp.playlist(playlist_id=playlist_id)
+    except Exception as e:
+        logging.error(f"skipping playlist '{playlist_id}': {e}")
+        return
+
+    playlist_link = playlist["external_urls"]["spotify"]
+    number_of_tracks = playlist["tracks"]["total"]
+    playlist_name = playlist["name"]
+    snapshot_id = playlist["snapshot_id"]
+
+    collections_folder = os.path.join(f"{cache_path}/collections")
+
+    if not os.path.exists(collections_folder):
+        os.makedirs(collections_folder)
+
+    collection_path = os.path.join(f"{collections_folder}/{playlist_id}.json")
+
+    if os.path.exists(collection_path):
+        with open(collection_path, "r") as f:
+            data = json.load(f)
+            if data["snapshot_id"] == snapshot_id:
+                logging.info(
+                    f"skipping playlist '{playlist_name}': already downloaded")
+                return
+
+    logging.info(
+        f"queuing playlist '{playlist_name}': {playlist_link}")
+
+    tracks = get_playlist_tracks(
+        sp=sp,
+        playlist_link=playlist_link,
+        playlist_name=playlist_name,
+        number_of_tracks=number_of_tracks)
+
+    fetched = get_tracks(sp=sp,
+                         tracks=tracks,
+                         download_missing=download_missing,
+                         download_path=download_path,
+                         beets=beets,
+                         downloaders=downloaders)
+
+    if len(fetched) == 0:
+        with open(collection_path, "w") as f:
+            json.dump(playlist, f)
+
+        logging.info(f"skipped playlist '{playlist_name}': no tracks found")
+        return
+
+    logging.info(f"fetched {len(fetched)}/{number_of_tracks} tracks")
+
+    if title is None:
+        title = playlist_name
+    if poster is None:
+        poster = playlist["images"][0]["url"]
+    if summary is None:
+        summary = playlist["description"]
+        summary = re.sub("""(<a href="(.*?)">)|(</a>)""", "", summary)
+        summary = html.unescape(summary)
+
+
+    m3u_path = os.path.join(f"{m3u_path}/collections")
+    m3u_path = os.path.abspath(m3u_path)
+
+    if not os.path.exists(m3u_path):
+        os.makedirs(m3u_path)
+
+    m3u_path = os.path.join(f"{m3u_path}/{playlist_id}.m3u")
+
+    with open(m3u_path, "w") as f:
+        f.write("#EXTM3U\n")
+        for track, path in fetched:
+            f.write(f"#EXTINF:0,{track}\n")
+            f.write(f"{path}\n")
+
+    pl = plex_server.createPlaylist(
+        title=title+" (temp)",
+        section=plex_section,
+        m3ufilepath=m3u_path)
+
+    items = pl.items()
+
+    try:
+        cl = plex_server.library.section(
+            plex_section).collection(title=title)
+        cl.delete()
+    except Exception as e:
+        logging.error(
+            f"failed to delete plex collection '{title}': {e}")
+    cl = plex_server.createCollection(
+        title=title,
+        items=items,
+        section=plex_section)
+    pl.delete()
+    cl.uploadPoster(url=poster)
+    cl.editSummary(summary=summary)
+    logging.info(f"created plex collection '{title}'")
+
+    with open(collection_path, "w") as f:
+        json.dump(playlist, f)
 
 
 def download_playlist(sp: spotipy.Spotify,
@@ -209,7 +324,6 @@ def download_playlist(sp: spotipy.Spotify,
                       beets: beets.Beets,
                       downloaders: dict,
                       download_missing=True,
-                      collection=False,
                       title=None,
                       poster=None,
                       summary=None,
@@ -277,49 +391,6 @@ def download_playlist(sp: spotipy.Spotify,
         summary = re.sub("""(<a href="(.*?)">)|(</a>)""", "", summary)
         summary = html.unescape(summary)
 
-    if collection:
-
-        m3u_path = os.path.join(f"{m3u_path}/collections")
-        m3u_path = os.path.abspath(m3u_path)
-
-        if not os.path.exists(m3u_path):
-            os.makedirs(m3u_path)
-
-        m3u_path = os.path.join(f"{m3u_path}/{playlist_id}.m3u")
-
-        with open(m3u_path, "w") as f:
-            f.write("#EXTM3U\n")
-            for track, path in fetched:
-                f.write(f"#EXTINF:0,{track}\n")
-                f.write(f"{path}\n")
-
-        pl = plex_server.createPlaylist(
-            title=title+" (temp)",
-            section=plex_section,
-            m3ufilepath=m3u_path)
-
-        items = pl.items()
-
-        try:
-            cl = plex_server.library.section(
-                plex_section).collection(title=title)
-            cl.delete()
-        except Exception as e:
-            logging.error(
-                f"failed to delete plex collection '{title}': {e}")
-        cl = plex_server.createCollection(
-            title=title,
-            items=items,
-            section=plex_section)
-        pl.delete()
-        cl.uploadPoster(url=poster)
-        cl.editSummary(summary=summary)
-        logging.info(f"created plex collection '{title}'")
-
-        with open(playlist_path, "w") as f:
-            json.dump(playlist, f)
-
-        return
 
     admin = plex_server.account().username
     plex_server_username = plex_server
@@ -474,7 +545,6 @@ def main():
                 beets=bt,
                 downloaders=downloaders,
                 download_missing=user.download_missing,
-                collection=False,
                 plex_section="Music"
             )
 
@@ -494,7 +564,6 @@ def main():
                 downloaders=downloaders,
                 plex_section=config.settings.plex["section"],
                 download_missing=playlist.download_missing,
-                collection=False,
                 title=playlist.title,
                 poster=playlist.poster,
                 summary=playlist.summary
@@ -504,10 +573,9 @@ def main():
         for collection in config.collections:
             collection = config.collections[collection]
             schedule.every(collection.schedule).minutes.do(
-                download_playlist,
+                download_collection,
                 sp=sp,
                 url=collection.url,
-                plex_usernames=[],
                 plex_server=plex_server,
                 cache_path=os.path.join(f"{env.config}/cache"),
                 m3u_path=os.path.join(f"{config.settings.music}/m3u"),
@@ -516,7 +584,6 @@ def main():
                 downloaders=downloaders,
                 plex_section=config.settings.plex["section"],
                 download_missing=collection.download_missing,
-                collection=True,
                 title=collection.title,
                 poster=collection.poster,
                 summary=collection.summary
