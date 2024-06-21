@@ -33,10 +33,22 @@ logging.basicConfig(
     level=logging.INFO)
 
 
-def get_playlist_tracks(sp: spotipy.Spotify, playlist_link: str, playlist_name: str, number_of_tracks: int) -> list:
+def fetch_playlist_tracks_from_spotify(sp: spotipy.Spotify, playlist_link: str, playlist_name: str, number_of_tracks: int) -> list:
+    """
+    Fetch playlist tracks from Spotify
+    sp: Spotify instance
+    playlist_link: Spotify playlist link
+    playlist_name: Spotify playlist name
+    number_of_tracks: number of tracks in playlist
+    """
+
     try:
         playlist_tracks = sp.playlist_tracks(
             playlist_link, limit=100, offset=0, fields="items(id,track(name,external_ids.isrc,href,album(name,id,href,external_urls.spotify,external_ids.upc,artists(name,id))))")
+        if playlist_tracks is None or playlist_tracks.get("items") is None:
+            logging.error(
+                f"skipping playlist '{playlist_name}': tracks not found")
+            return []
         playlist_tracks = playlist_tracks["items"]
     except Exception as e:
         logging.error(f"skipping playlist '{playlist_name}': {e}")
@@ -47,6 +59,10 @@ def get_playlist_tracks(sp: spotipy.Spotify, playlist_link: str, playlist_name: 
         try:
             playlist_track_continued = sp.playlist_tracks(
                 playlist_link, limit=100, offset=len(playlist_tracks), fields="items(id,track(name,external_ids.isrc,href,album(name,id,href,external_urls.spotify,external_ids.upc,artists(name,id))))")
+            if playlist_track_continued is None or playlist_track_continued.get("items") is None:
+                logging.error(
+                    f"error getting '{playlist_name}' tracks at offset {len(playlist_tracks)}")
+                return playlist_tracks
             playlist_tracks.extend(playlist_track_continued["items"])
         except Exception as e:
             logging.error(
@@ -56,12 +72,21 @@ def get_playlist_tracks(sp: spotipy.Spotify, playlist_link: str, playlist_name: 
     return playlist_tracks
 
 
-def get_username_playlists(sp: spotipy.Spotify, username: str) -> list:
+def fetch_playlists_from_spotify_username(sp: spotipy.Spotify, username: str) -> list:
+    """
+    Fetch playlists from Spotify username
+    sp: Spotify instance
+    username: Spotify username
+    """
 
     logging.info(f"getting playlists for user {username}")
     number_of_playlists = 0
     try:
         user_playlists = sp.user_playlists(username, limit=50)
+        if user_playlists is None or user_playlists.get("items") is None:
+            logging.error(
+                f"skipping user {username}: playlists not found")
+            return []
         number_of_playlists = user_playlists["total"]
 
     except Exception as e:
@@ -79,6 +104,10 @@ def get_username_playlists(sp: spotipy.Spotify, username: str) -> list:
         try:
             user_playlists = sp.user_playlists(
                 username, limit=50, offset=len(playlists))
+            if user_playlists is None or user_playlists.get("items") is None:
+                logging.error(
+                    f"error getting '{username} playlists at offset {len(playlists)}")
+                return playlists
             playlists.extend(user_playlists["items"])
         except Exception as e:
             logging.error(
@@ -89,7 +118,15 @@ def get_username_playlists(sp: spotipy.Spotify, username: str) -> list:
     return playlists
 
 
-def get_tracks(sp: spotipy.Spotify, tracks: list, download_missing: bool, download_path: str, beets: beets.Beets, downloaders: dict) -> list:
+def match_tracks_from_spotify(tracks: list, download_missing: bool, download_path: str, beets: beets.Beets, downloaders: dict) -> list:
+    """
+    Match tracks from Spotify to local library
+    tracks: list of Spotify tracks
+    download_missing: download missing tracks
+    download_path: path to download missing tracks
+    beets: Beets instance
+    downloaders: downloaders dict
+    """
 
     fetched = []
     for track in tracks:
@@ -165,50 +202,85 @@ def get_tracks(sp: spotipy.Spotify, tracks: list, download_missing: bool, downlo
     return fetched
 
 
-def download_username(sp: spotipy.Spotify,
-                      spotify_username: str,
-                      plex_usernames: list,
-                      plex_server: PlexServer,
-                      m3u_path: str,
-                      cache_path: str,
-                      download_path: str,
-                      beets: beets.Beets,
-                      downloaders: dict,
-                      download_missing=True,
-                      plex_section="Music") -> None:
+def sp_username_to_plex_playlists(sp: spotipy.Spotify,
+                                  spotify_username: str,
+                                  plex_usernames: list,
+                                  plex_server: PlexServer,
+                                  m3u_path: str,
+                                  cache_path: str,
+                                  download_path: str,
+                                  beets: beets.Beets,
+                                  downloaders: dict,
+                                  download_missing=True,
+                                  plex_section="Music") -> None:
+    """
+    Match Spotify username's playlist to Plex users 
+    sp: Spotify instance
+    spotify_username: Spotify username 
+    plex_usernames: list of Plex usernames 
+    plex_server: Plex server instance 
+    m3u_path: path to m3u files
+    cache_path: path to cache files
+    download_path: path to download missing tracks
+    beets: Beets instance
+    downloaders: downloaders dict 
+    download_missing: download missing tracks 
+    plex_section: Plex section 
+    """
 
-    playlists = get_username_playlists(
+    playlists = fetch_playlists_from_spotify_username(
         sp=sp,
         username=spotify_username)
 
     for playlist in playlists:
 
+        if playlist.get("external_urls") is None or playlist["external_urls"].get("spotify") is None:
+            logging.error(f"skipping playlist '{playlist['name']}':"
+                          + " link not found")
+            continue
         url = playlist["external_urls"]["spotify"]
-        download_playlist(sp=sp,
-                          url=url,
-                          plex_usernames=plex_usernames,
-                          plex_server=plex_server,
-                          m3u_path=m3u_path,
-                          cache_path=cache_path,
-                          download_path=download_path,
-                          beets=beets,
-                          downloaders=downloaders,
-                          download_missing=download_missing,
-                          plex_section=plex_section)
+        sp_playlist_to_plex_playlist(sp=sp,
+                                     url=url,
+                                     plex_usernames=plex_usernames,
+                                     plex_server=plex_server,
+                                     m3u_path=m3u_path,
+                                     cache_path=cache_path,
+                                     download_path=download_path,
+                                     beets=beets,
+                                     downloaders=downloaders,
+                                     download_missing=download_missing,
+                                     plex_section=plex_section)
 
-def download_collection(sp: spotipy.Spotify,
-                      url: str,
-                      plex_server: PlexServer,
-                      m3u_path: str,
-                      cache_path: str,
-                      download_path: str,
-                      beets: beets.Beets,
-                      downloaders: dict,
-                      download_missing=True,
-                      title=None,
-                      poster=None,
-                      summary=None,
-                      plex_section="Music") -> None:
+
+def sp_playlist_to_plex_collection(sp: spotipy.Spotify,
+                                   url: str,
+                                   plex_server: PlexServer,
+                                   m3u_path: str,
+                                   cache_path: str,
+                                   download_path: str,
+                                   beets: beets.Beets,
+                                   downloaders: dict,
+                                   download_missing=True,
+                                   title=None,
+                                   poster=None,
+                                   summary=None,
+                                   plex_section="Music") -> None:
+    """
+    Match Spotify playlist to Plex Collection
+    sp: Spotify instance
+    url: Spotify playlist link
+    plex_server: Plex server instance
+    m3u_path: path to m3u files
+    cache_path: path to cache files
+    download_path: path to download missing tracks
+    beets: Beets instance
+    downloaders: downloaders dict 
+    download_missing: download missing tracks
+    title: collection title
+    poster: collection poster
+    summary: collection summary
+    plex_section: Plex section
+    """
 
     playlist_id = url.split("/")[-1]
 
@@ -218,9 +290,25 @@ def download_collection(sp: spotipy.Spotify,
         logging.error(f"skipping playlist '{playlist_id}': {e}")
         return
 
+    if playlist is None:
+        logging.error(f"skipping playlist '{playlist_id}': not found")
+        return
+    if playlist.get("external_urls") is None or playlist["external_urls"].get("spotify") is None:
+        logging.error(f"skipping playlist '{playlist_id}': link not found")
+        return
     playlist_link = playlist["external_urls"]["spotify"]
+    if playlist.get("tracks") is None or playlist["tracks"].get("total") is None:
+        logging.error(f"skipping playlist '{playlist_id}': tracks not found")
+        return
     number_of_tracks = playlist["tracks"]["total"]
+    if playlist.get("name") is None:
+        logging.error(f"skipping playlist '{playlist_id}': name not found")
+        return
     playlist_name = playlist["name"]
+    if playlist.get("snapshot_id") is None:
+        logging.error(f"skipping playlist '{playlist_id}':"
+                      + " snapshot_id not found")
+        return
     snapshot_id = playlist["snapshot_id"]
 
     collections_folder = os.path.join(f"{cache_path}/collections")
@@ -241,18 +329,18 @@ def download_collection(sp: spotipy.Spotify,
     logging.info(
         f"queuing playlist '{playlist_name}': {playlist_link}")
 
-    tracks = get_playlist_tracks(
+    tracks = fetch_playlist_tracks_from_spotify(
         sp=sp,
         playlist_link=playlist_link,
         playlist_name=playlist_name,
         number_of_tracks=number_of_tracks)
 
-    fetched = get_tracks(sp=sp,
-                         tracks=tracks,
-                         download_missing=download_missing,
-                         download_path=download_path,
-                         beets=beets,
-                         downloaders=downloaders)
+    fetched = match_tracks_from_spotify(
+        tracks=tracks,
+        download_missing=download_missing,
+        download_path=download_path,
+        beets=beets,
+        downloaders=downloaders)
 
     if len(fetched) == 0:
         with open(collection_path, "w") as f:
@@ -271,7 +359,6 @@ def download_collection(sp: spotipy.Spotify,
         summary = playlist["description"]
         summary = re.sub("""(<a href="(.*?)">)|(</a>)""", "", summary)
         summary = html.unescape(summary)
-
 
     m3u_path = os.path.join(f"{m3u_path}/collections")
     m3u_path = os.path.abspath(m3u_path)
@@ -314,20 +401,37 @@ def download_collection(sp: spotipy.Spotify,
         json.dump(playlist, f)
 
 
-def download_playlist(sp: spotipy.Spotify,
-                      url: str,
-                      plex_usernames: list,
-                      plex_server: PlexServer,
-                      m3u_path: str,
-                      cache_path: str,
-                      download_path: str,
-                      beets: beets.Beets,
-                      downloaders: dict,
-                      download_missing=True,
-                      title=None,
-                      poster=None,
-                      summary=None,
-                      plex_section="Music") -> None:
+def sp_playlist_to_plex_playlist(sp: spotipy.Spotify,
+                                 url: str,
+                                 plex_usernames: list,
+                                 plex_server: PlexServer,
+                                 m3u_path: str,
+                                 cache_path: str,
+                                 download_path: str,
+                                 beets: beets.Beets,
+                                 downloaders: dict,
+                                 download_missing=True,
+                                 title=None,
+                                 poster=None,
+                                 summary=None,
+                                 plex_section="Music") -> None:
+    """
+    Match Spotify playlist to Plex playlist 
+    sp: Spotify instance
+    url: Spotify playlist link
+    plex_usernames: list of Plex usernames
+    plex_server: Plex server instance
+    m3u_path: path to m3u files
+    cache_path: path to cache files
+    download_path: path to download missing tracks
+    beets: Beets instance
+    downloaders: downloaders dict 
+    download_missing: download missing tracks
+    title: playlist title
+    poster: playlist poster
+    summary: playlist summary
+    plex_section: Plex section
+    """
 
     playlist_id = url.split("/")[-1]
 
@@ -337,9 +441,25 @@ def download_playlist(sp: spotipy.Spotify,
         logging.error(f"skipping playlist '{playlist_id}': {e}")
         return
 
+    if playlist is None:
+        logging.error(f"skipping playlist '{playlist_id}': not found")
+        return
+    if playlist.get("external_urls") is None or playlist["external_urls"].get("spotify") is None:
+        logging.error(f"skipping playlist '{playlist_id}': link not found")
+        return
     playlist_link = playlist["external_urls"]["spotify"]
+    if playlist.get("tracks") is None or playlist["tracks"].get("total") is None:
+        logging.error(f"skipping playlist '{playlist_id}': tracks not found")
+        return
     number_of_tracks = playlist["tracks"]["total"]
+    if playlist.get("name") is None:
+        logging.error(f"skipping playlist '{playlist_id}': name not found")
+        return
     playlist_name = playlist["name"]
+    if playlist.get("snapshot_id") is None:
+        logging.error(f"skipping playlist '{playlist_id}':"
+                      + " snapshot_id not found")
+        return
     snapshot_id = playlist["snapshot_id"]
 
     playlists_folder = os.path.join(f"{cache_path}/playlists")
@@ -360,18 +480,18 @@ def download_playlist(sp: spotipy.Spotify,
     logging.info(
         f"queuing playlist '{playlist_name}': {playlist_link}")
 
-    tracks = get_playlist_tracks(
+    tracks = fetch_playlist_tracks_from_spotify(
         sp=sp,
         playlist_link=playlist_link,
         playlist_name=playlist_name,
         number_of_tracks=number_of_tracks)
 
-    fetched = get_tracks(sp=sp,
-                         tracks=tracks,
-                         download_missing=download_missing,
-                         download_path=download_path,
-                         beets=beets,
-                         downloaders=downloaders)
+    fetched = match_tracks_from_spotify(
+        tracks=tracks,
+        download_missing=download_missing,
+        download_path=download_path,
+        beets=beets,
+        downloaders=downloaders)
 
     if len(fetched) == 0:
         with open(playlist_path, "w") as f:
@@ -390,7 +510,6 @@ def download_playlist(sp: spotipy.Spotify,
         summary = playlist["description"]
         summary = re.sub("""(<a href="(.*?)">)|(</a>)""", "", summary)
         summary = html.unescape(summary)
-
 
     admin = plex_server.account().username
     plex_server_username = plex_server
@@ -534,7 +653,7 @@ def main():
         for user in config.usernames:
             user = config.usernames[user]
             schedule.every(user.schedule).minutes.do(
-                download_username,
+                sp_username_to_plex_playlists,
                 sp=sp,
                 spotify_username=user.spotify_username,
                 plex_usernames=user.sync_to_plex_users,
@@ -552,7 +671,7 @@ def main():
         for playlist in config.playlists:
             playlist = config.playlists[playlist]
             schedule.every(playlist.schedule).minutes.do(
-                download_playlist,
+                sp_playlist_to_plex_playlist,
                 sp=sp,
                 url=playlist.url,
                 plex_usernames=playlist.sync_to_plex_users,
@@ -573,7 +692,7 @@ def main():
         for collection in config.collections:
             collection = config.collections[collection]
             schedule.every(collection.schedule).minutes.do(
-                download_collection,
+                sp_playlist_to_plex_collection,
                 sp=sp,
                 url=collection.url,
                 plex_server=plex_server,
