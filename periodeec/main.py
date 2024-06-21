@@ -33,43 +33,48 @@ logging.basicConfig(
     level=logging.INFO)
 
 
-def fetch_playlist_tracks_from_spotify(sp: spotipy.Spotify, playlist_link: str, playlist_name: str, number_of_tracks: int) -> list:
+def fetch_playlist_tracks_from_sp(sp: spotipy.Spotify, link: str, name: str, number_of_tracks: int) -> list:
     """
     Fetch playlist tracks from Spotify
     sp: Spotify instance
-    playlist_link: Spotify playlist link
-    playlist_name: Spotify playlist name
+    link: Spotify playlist link
+    name: Spotify playlist name
     number_of_tracks: number of tracks in playlist
     """
 
+    l = 100
+    o = 0
+    f = "items(id,track(name,external_ids.isrc,href,album(name,id,href,external_urls.spotify,artists(name,id))))"
+    error = f"skipping playlist '{name}'"
+
     try:
-        playlist_tracks = sp.playlist_tracks(
-            playlist_link, limit=100, offset=0, fields="items(id,track(name,external_ids.isrc,href,album(name,id,href,external_urls.spotify,external_ids.upc,artists(name,id))))")
-        if playlist_tracks is None or playlist_tracks.get("items") is None:
+        tracks = sp.playlist_tracks(link, limit=l, offset=o, fields=f)
+        if tracks is None or tracks.get("items") is None:
             logging.error(
-                f"skipping playlist '{playlist_name}': tracks not found")
+                f"{error}: tracks not found")
             return []
-        playlist_tracks = playlist_tracks["items"]
     except Exception as e:
-        logging.error(f"skipping playlist '{playlist_name}': {e}")
+        logging.error(f"{error}: {e}")
         return []
 
-    while len(playlist_tracks) < number_of_tracks:
-        time.sleep(random.uniform(3, 5))
-        try:
-            playlist_track_continued = sp.playlist_tracks(
-                playlist_link, limit=100, offset=len(playlist_tracks), fields="items(id,track(name,external_ids.isrc,href,album(name,id,href,external_urls.spotify,external_ids.upc,artists(name,id))))")
-            if playlist_track_continued is None or playlist_track_continued.get("items") is None:
-                logging.error(
-                    f"error getting '{playlist_name}' tracks at offset {len(playlist_tracks)}")
-                return playlist_tracks
-            playlist_tracks.extend(playlist_track_continued["items"])
-        except Exception as e:
-            logging.error(
-                f"error getting '{playlist_name}' tracks at offset {len(playlist_tracks)}: {e}")
-            return playlist_tracks
+    tracks = tracks["items"]
+    o = len(tracks)
 
-    return playlist_tracks
+    while o < number_of_tracks:
+        time.sleep(random.uniform(3, 5))
+        o = len(tracks)
+        error = f"error getting '{name}' tracks at offset {o}"
+        try:
+            tracks_cont = sp.playlist_tracks(link, limit=l, offset=o, fields=f)
+            if tracks_cont is None or tracks_cont.get("items") is None:
+                logging.error(error)
+                return tracks
+            tracks.extend(tracks_cont["items"])
+        except Exception as e:
+            logging.error(f"{error}: {e}")
+            return tracks
+
+    return tracks
 
 
 def fetch_playlists_from_spotify_username(sp: spotipy.Spotify, username: str) -> list:
@@ -80,45 +85,45 @@ def fetch_playlists_from_spotify_username(sp: spotipy.Spotify, username: str) ->
     """
 
     logging.info(f"getting playlists for user {username}")
-    number_of_playlists = 0
+    l = 50
+    n = 0
     try:
-        user_playlists = sp.user_playlists(username, limit=50)
-        if user_playlists is None or user_playlists.get("items") is None:
+        playlists = sp.user_playlists(username, limit=l)
+        if playlists is None or playlists.get("items") is None:
             logging.error(
                 f"skipping user {username}: playlists not found")
             return []
-        number_of_playlists = user_playlists["total"]
+        n = playlists["total"]
 
     except Exception as e:
         logging.error(f"skipping user {username}: {e}")
         return []
 
-    if user_playlists is None:
+    if playlists is None:
         logging.error(f"skipping user {username}: playlists not found")
         return []
 
-    playlists = user_playlists["items"]
+    playlists = playlists["items"]
+    o = len(playlists)
 
-    while len(playlists) < number_of_playlists:
+    while o < n:
+        o = len(playlists)
+        error = f"error getting '{username} playlists at offset {o}"
         time.sleep(random.uniform(3, 5))
         try:
-            user_playlists = sp.user_playlists(
-                username, limit=50, offset=len(playlists))
-            if user_playlists is None or user_playlists.get("items") is None:
-                logging.error(
-                    f"error getting '{username} playlists at offset {len(playlists)}")
+            playlists_cont = sp.user_playlists(username, limit=50, offset=o)
+            if playlists_cont is None or playlists_cont.get("items") is None:
+                logging.error(error)
                 return playlists
-            playlists.extend(user_playlists["items"])
+            playlists.extend(playlists_cont["items"])
         except Exception as e:
-            logging.error(
-                f"error getting '{username} playlists at offset {len(playlists)}: {e}")
+            logging.error(f"{error}: {e}")
 
-    logging.info(
-        f"parsed {len(playlists)}/{number_of_playlists} playlists for user {username}")
+    logging.info(f"parsed {len(playlists)}/{n} playlists for user {username}")
     return playlists
 
 
-def match_tracks_from_spotify(tracks: list, download_missing: bool, download_path: str, beets: beets.Beets, downloaders: dict) -> list:
+def match_tracks_from_sp(tracks: list, download_missing: bool, download_path: str, beets: beets.Beets, downloaders: dict) -> list:
     """
     Match tracks from Spotify to local library
     tracks: list of Spotify tracks
@@ -136,68 +141,68 @@ def match_tracks_from_spotify(tracks: list, download_missing: bool, download_pat
         album_link = album["external_urls"].get("spotify")
         album_name = album["name"]
         artist_name = album["artists"][0]["name"]
+        error = f"failed to fetch {track_name}"
 
         if isrc is None:
-            logging.debug(
-                f"skipping {track_name}: isrc not found")
+            logging.debug(f"{error}: isrc not found")
             continue
 
         if album_link is None:
-            logging.debug(
-                f"skipping {track_name}: album link found")
+            logging.debug(f"{error}: album link found")
             continue
 
         exists, path = beets.exists(isrc)
 
         if exists:
-            logging.debug(
-                f"skipping {track_name}: already exists at {path}")
+            logging.debug(f"{error}: already exists at {path}")
             fetched.append((track_name, path))
             continue
 
         if download_missing:
 
+            error = f"failed to download {track_name}"
             if len(downloaders) == 0:
-                logging.error(
-                    "failed to download missing tracks: no downloaders found")
+                logging.error(f"{error}: no downloaders found")
                 return fetched
 
             fallback_album_query = f"{artist_name} {album_name}"
 
             for dl in downloaders:
+                error = f"failed to download {track_name} in {dl}"
                 downloader = downloaders[dl]
                 logging.debug(f"queuing {album_name} in {dl}")
-                success, path, err = downloader.enqueue(
+                success, path, e = downloader.enqueue(
                     path=download_path,
                     isrc=isrc,
                     link=album_link,
                     fallback_album_query=fallback_album_query)
 
                 if not success:
-                    logging.error(
-                        f"failed to download album {album_name} in {dl}: {err}")
+                    logging.error(f"{error}: {e}")
                     continue
 
                 if not os.path.exists(path):
-                    logging.error(
-                        f"failed to download album {album_name}: directory {path} doesn't exist")
+                    logging.error(f"{error}: directory {path} doesn't exist")
                     continue
 
                 with open(os.path.join(path, "spotify.json"), "w") as f:
                     json.dump(album, f)
 
                 success, e = beets.add(path=path, search_id=album_link)
+                details = f"album '{album_name}' including '{track_name}'"
+                where = "to beets library"
+                details = f"{details} {where}"
 
                 if success:
-                    logging.info(
-                        f"added {album_name} to beets library")
+                    success_message = f"added {details}"
+                    logging.info(success_message)
                     exists, path = beets.exists(isrc)
                     if exists:
                         fetched.append((track_name, path))
                     break
                 else:
-                    logging.error(
-                        f"failed to add {album_name} to beets library: {e}")
+                    error = f"failed to add {details}: {e}"
+                    logging.error(error)
                     continue
     return fetched
 
@@ -329,13 +334,13 @@ def sp_playlist_to_plex_collection(sp: spotipy.Spotify,
     logging.info(
         f"queuing playlist '{playlist_name}': {playlist_link}")
 
-    tracks = fetch_playlist_tracks_from_spotify(
+    tracks = fetch_playlist_tracks_from_sp(
         sp=sp,
-        playlist_link=playlist_link,
-        playlist_name=playlist_name,
+        link=playlist_link,
+        name=playlist_name,
         number_of_tracks=number_of_tracks)
 
-    fetched = match_tracks_from_spotify(
+    fetched = match_tracks_from_sp(
         tracks=tracks,
         download_missing=download_missing,
         download_path=download_path,
@@ -434,32 +439,33 @@ def sp_playlist_to_plex_playlist(sp: spotipy.Spotify,
     """
 
     playlist_id = url.split("/")[-1]
+    error = f"skippping playlist '{playlist_id}'"
 
     try:
         playlist = sp.playlist(playlist_id=playlist_id)
     except Exception as e:
-        logging.error(f"skipping playlist '{playlist_id}': {e}")
+        logging.error(f"{error}: {e}")
         return
 
     if playlist is None:
-        logging.error(f"skipping playlist '{playlist_id}': not found")
+        logging.error(f"{error}: not found")
         return
     if playlist.get("external_urls") is None or playlist["external_urls"].get("spotify") is None:
-        logging.error(f"skipping playlist '{playlist_id}': link not found")
+        logging.error(f"{error}: link not found")
         return
     playlist_link = playlist["external_urls"]["spotify"]
     if playlist.get("tracks") is None or playlist["tracks"].get("total") is None:
-        logging.error(f"skipping playlist '{playlist_id}': tracks not found")
+        logging.error(f"{error}: tracks not found")
         return
     number_of_tracks = playlist["tracks"]["total"]
     if playlist.get("name") is None:
-        logging.error(f"skipping playlist '{playlist_id}': name not found")
+        logging.error(f"{error}: name not found")
         return
     playlist_name = playlist["name"]
     if playlist.get("snapshot_id") is None:
-        logging.error(f"skipping playlist '{playlist_id}':"
-                      + " snapshot_id not found")
+        logging.error(f"{error}: snapshot_id not found")
         return
+    error = f"skippping playlist '{playlist_name}' ({playlist_id})"
     snapshot_id = playlist["snapshot_id"]
 
     playlists_folder = os.path.join(f"{cache_path}/playlists")
@@ -474,19 +480,19 @@ def sp_playlist_to_plex_playlist(sp: spotipy.Spotify,
             data = json.load(f)
             if data["snapshot_id"] == snapshot_id:
                 logging.info(
-                    f"skipping playlist '{playlist_name}': already downloaded")
+                    f"{error}: already downloaded")
                 return
 
     logging.info(
         f"queuing playlist '{playlist_name}': {playlist_link}")
 
-    tracks = fetch_playlist_tracks_from_spotify(
+    tracks = fetch_playlist_tracks_from_sp(
         sp=sp,
-        playlist_link=playlist_link,
-        playlist_name=playlist_name,
+        link=playlist_link,
+        name=playlist_name,
         number_of_tracks=number_of_tracks)
 
-    fetched = match_tracks_from_spotify(
+    fetched = match_tracks_from_sp(
         tracks=tracks,
         download_missing=download_missing,
         download_path=download_path,
@@ -497,7 +503,7 @@ def sp_playlist_to_plex_playlist(sp: spotipy.Spotify,
         with open(playlist_path, "w") as f:
             json.dump(playlist, f)
 
-        logging.info(f"skipped playlist '{playlist_name}': no tracks found")
+        logging.info(f"{error}: no tracks found")
         return
 
     logging.info(f"fetched {len(fetched)}/{number_of_tracks} tracks")
