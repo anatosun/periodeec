@@ -199,7 +199,8 @@ def match_tracks_from_sp(tracks: list, download_missing: bool, download_path: st
                     exists, path = beets.exists(isrc)
                     if exists:
                         fetched.append((track_name, path))
-                    break
+                    else:
+                        logging.error(f"failed to retrieve {details}")
                 else:
                     error = f"failed to add {details}: {e}"
                     logging.error(error)
