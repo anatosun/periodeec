@@ -289,31 +289,31 @@ def sp_playlist_to_plex_collection(sp: spotipy.Spotify,
     """
 
     playlist_id = url.split("/")[-1]
+    error = f"skippping playlist '{url}'"
 
     try:
         playlist = sp.playlist(playlist_id=playlist_id)
     except Exception as e:
-        logging.error(f"skipping playlist '{playlist_id}': {e}")
+        logging.error(f"{error}: {e}")
         return
 
     if playlist is None:
-        logging.error(f"skipping playlist '{playlist_id}': not found")
+        logging.error(f"{error}: not found")
         return
     if playlist.get("external_urls") is None or playlist["external_urls"].get("spotify") is None:
-        logging.error(f"skipping playlist '{playlist_id}': link not found")
+        logging.error(f"{error}: link not found")
         return
     playlist_link = playlist["external_urls"]["spotify"]
     if playlist.get("tracks") is None or playlist["tracks"].get("total") is None:
-        logging.error(f"skipping playlist '{playlist_id}': tracks not found")
+        logging.error(f"{error}: tracks not found")
         return
     number_of_tracks = playlist["tracks"]["total"]
     if playlist.get("name") is None:
-        logging.error(f"skipping playlist '{playlist_id}': name not found")
+        logging.error(f"{error}: name not found")
         return
     playlist_name = playlist["name"]
     if playlist.get("snapshot_id") is None:
-        logging.error(f"skipping playlist '{playlist_id}':"
-                      + " snapshot_id not found")
+        logging.error(f"{error}: snapshot_id not found")
         return
     snapshot_id = playlist["snapshot_id"]
 
@@ -323,13 +323,14 @@ def sp_playlist_to_plex_collection(sp: spotipy.Spotify,
         os.makedirs(collections_folder)
 
     collection_path = os.path.join(f"{collections_folder}/{playlist_id}.json")
+    error = f"skippping playlist '{playlist_name}' ({url})"
 
     if os.path.exists(collection_path):
         with open(collection_path, "r") as f:
             data = json.load(f)
             if data["snapshot_id"] == snapshot_id:
                 logging.info(
-                    f"skipping playlist '{playlist_name}': already downloaded")
+                    f"{error}: already downloaded")
                 return
 
     logging.info(
@@ -352,7 +353,7 @@ def sp_playlist_to_plex_collection(sp: spotipy.Spotify,
         with open(collection_path, "w") as f:
             json.dump(playlist, f)
 
-        logging.info(f"skipped playlist '{playlist_name}': no tracks found")
+        logging.info(f"{error}: no tracks found")
         return
 
     logging.info(f"fetched {len(fetched)}/{number_of_tracks} tracks")
@@ -440,7 +441,7 @@ def sp_playlist_to_plex_playlist(sp: spotipy.Spotify,
     """
 
     playlist_id = url.split("/")[-1]
-    error = f"skippping playlist '{playlist_id}'"
+    error = f"skippping playlist '{url}'"
 
     try:
         playlist = sp.playlist(playlist_id=playlist_id)
@@ -466,7 +467,7 @@ def sp_playlist_to_plex_playlist(sp: spotipy.Spotify,
     if playlist.get("snapshot_id") is None:
         logging.error(f"{error}: snapshot_id not found")
         return
-    error = f"skippping playlist '{playlist_name}' ({playlist_id})"
+    error = f"skippping playlist '{playlist_name}' ({url})"
     snapshot_id = playlist["snapshot_id"]
 
     playlists_folder = os.path.join(f"{cache_path}/playlists")
