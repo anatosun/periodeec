@@ -5,5 +5,5 @@ git+https://github.com/beetbox/beets.git
 beets-filetote
 tidal-dl
 deemix
-qobuz-dl
+git+https://github.com/KMohZaid/qobuz-dl
 colorama
