@@ -7,8 +7,10 @@ class Qobuz:
     def __init__(self, email, password):
         self.qobuz = QobuzDL(quality=27, embed_art=True, cover_og_quality=True)
         self.qobuz.get_tokens()
+        app_id = "579939560"
+        app_secret = "fa31fc13e7a28e7d70bb61e91aa9e178"
         self.qobuz.initialize_client(
-                email, password, self.qobuz.app_id, self.qobuz.secrets)
+                str(email), str(password), app_id, app_secret)
 
     def enqueue(self, path: str, isrc=None, link=None, fallback_album_query=None) -> tuple[bool, str, str]:
 
