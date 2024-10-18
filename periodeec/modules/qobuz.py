@@ -4,14 +4,10 @@ from qobuz_dl.core import QobuzDL
 
 class Qobuz:
 
-    def __init__(self, email, password, token=None):
+    def __init__(self, email, password):
         self.qobuz = QobuzDL(quality=27, embed_art=True, cover_og_quality=True)
         self.qobuz.get_tokens()
-        if token is not None:
-            self.qobuz.initialize_client_via_token(
-                token, self.qobuz.app_id, self.qobuz.secrets)
-        else:
-            self.qobuz.initialize_client(
+        self.qobuz.initialize_client(
                 email, password, self.qobuz.app_id, self.qobuz.secrets)
 
     def enqueue(self, path: str, isrc=None, link=None, fallback_album_query=None) -> tuple[bool, str, str]:
