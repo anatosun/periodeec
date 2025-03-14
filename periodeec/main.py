@@ -10,6 +10,7 @@ import logging
 import schedule
 import importlib
 import time
+import hashlib
 from periodeec.config import Config, Settings, User
 from periodeec.playlist import Playlist
 from periodeec.spotify_handler import SpotifyHandler
@@ -49,7 +50,9 @@ def sync_playlist_to_plex(playlist: Playlist, plex_handler: PlexHandler, spotify
                 track.path = path
             else:
                 if download_path and downloaders:
-                    download_path = os.path.join(download_path, track.isrc)
+                    hash = hashlib.sha256(
+                        f"{track.artist}{track.album}".encode()).hexdigest()[:]
+                    download_path = os.path.join(download_path, hash)
                     for downloader in downloaders.values():
                         success, path, err = downloader.enqueue(
                             path=download_path, isrc=track.isrc, fallback_album_query=f"{track.artist} {track.album}"
