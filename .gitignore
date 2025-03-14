@@ -168,6 +168,8 @@ lib64
 
 
 # periodeec
-./config
+config
 not_found.txt
 *.json
+music
+
