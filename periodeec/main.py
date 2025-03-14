@@ -13,6 +13,8 @@ import time
 from periodeec.config import Config, Settings, User
 from periodeec.playlist import Playlist
 from periodeec.spotify_handler import SpotifyHandler
+import colorama
+colorama.init(strip=True, convert=False)
 
 
 @dataclass
