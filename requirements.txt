@@ -1,0 +1,10 @@
+requests
+spotipy
+spotipy-anon
+async-timeout
+git+https://github.com/beetbox/beets.git
+beets-filetote
+tidal-dl
+deemix
+git+https://github.com/streetsamurai00mi/qz-dl.git
+colorama
