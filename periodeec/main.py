@@ -59,7 +59,12 @@ def sync_playlist_to_plex(playlist: Playlist, plex_handler: PlexHandler, spotify
                         )
                         if success:
                             success, path = bt.add(download_path, track.isrc)
-                            track.path = path
+                            if success:
+                                track.path = path
+                            else:
+                                success, path = bt.add(download_path)
+                                if success:
+                                    track.path = path
                         else:
                             logging.error(err)
 

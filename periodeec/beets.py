@@ -40,7 +40,7 @@ class Beets():
         logging.info(f"Track found: {output}")
         return True, output.split("\n")[0][1:-1]
 
-    def add(self, path: str, search_id: str) -> tuple[bool, str]:
+    def add(self, path: str, search_id="") -> tuple[bool, str]:
         """Attempts to add a track to the Beets library."""
         logging.info(
             f"Adding track to Beets: path={path}, search_id={search_id}")
