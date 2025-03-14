@@ -1,9 +1,5 @@
 FROM python:3.11-slim-bookworm
 
-RUN apt-get update && apt-get upgrade -y 
-RUN apt-get install git nodejs npm atomicparsley -y 
-RUN npm install -g freyr
-
 
 
 ENV WORKDIR /app
