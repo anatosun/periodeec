@@ -47,6 +47,7 @@ def sync_playlist_to_plex(playlist: Playlist, plex_handler: PlexHandler, spotify
                 track.path = path
             else:
                 if download_path and downloaders:
+                    download_path = os.path.join(download_path, track.isrc)
                     for downloader in downloaders.values():
                         success, path, err = downloader.enqueue(
                             path=download_path, isrc=track.isrc, fallback_album_query=f"{track.artist} {track.album}"
@@ -54,6 +55,8 @@ def sync_playlist_to_plex(playlist: Playlist, plex_handler: PlexHandler, spotify
                         if success:
                             success, path = bt.add(download_path, track.isrc)
                             track.path = path
+                        else:
+                            logging.error(err)
 
     plex_handler.create(playlist, collection)
 
