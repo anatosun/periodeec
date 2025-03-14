@@ -1,5 +1,5 @@
 class Track:
-    def __init__(self, title: str, isrc: str, album: str, artist: str, path: str = None):
+    def __init__(self, title: str, isrc: str, album: str, artist: str, path: str = ""):
         """
         Represents a track with relevant metadata.
         """
