@@ -33,7 +33,7 @@ logging.basicConfig(
     level=logging.INFO)
 
 
-def sync_playlist_to_plex(playlist: Playlist, plex_handler: PlexHandler, spotify_handler: SpotifyHandler, bt, downloaders, download_path, collection=False):
+def sync_playlist_to_plex(playlist: Playlist, username: User, plex_handler: PlexHandler, spotify_handler: SpotifyHandler, bt, downloaders, download_path, collection=False):
     """Handles the process of fetching, matching, and syncing a Spotify playlist to Plex."""
     logging.info(f"Syncing playlist '{playlist.title}' to Plex")
     spotify_handler.populate_playlist(playlist)
@@ -68,7 +68,7 @@ def sync_playlist_to_plex(playlist: Playlist, plex_handler: PlexHandler, spotify
                         else:
                             logging.error(err)
 
-    plex_handler.create(playlist, collection)
+    plex_handler.create(playlist, username, collection)
 
 
 def sync(spotify_handler, plex_handler, config, bt, downloaders, settings):
@@ -80,7 +80,7 @@ def sync(spotify_handler, plex_handler, config, bt, downloaders, settings):
             for playlist in playlists:
                 schedule.every(user.schedule).minutes.do(
                     lambda pl=playlist: sync_playlist_to_plex(
-                        pl, plex_handler, spotify_handler, bt, downloaders, settings.downloads
+                        pl, user, plex_handler, spotify_handler, bt, downloaders, settings.downloads
                     )
                 )
 
