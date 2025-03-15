@@ -72,7 +72,6 @@ class PlexHandler:
             except Exception as e:
                 logging.error(
                     f"Failed to create collection {playlist.title}: {e}")
-                return False
 
         else:
             try:
@@ -100,8 +99,7 @@ class PlexHandler:
                     logging.error(
                         f"Error creating playlist {playlist.title} {e}")
 
-            if username == self.admin_user:
-                try:
-                    temp_playlist.delete()
-                except Exception as e:
-                    logging.error(f"Error deleting temp playlist {e}")
+        try:
+            temp_playlist.delete()
+        except Exception as e:
+            logging.error(f"Error deleting temp playlist {e}")
