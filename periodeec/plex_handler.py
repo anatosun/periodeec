@@ -21,12 +21,13 @@ class PlexHandler:
             return self.plex_server.switchUser(username)
         return self.plex_server
 
-    def create_m3u(self, playlist: Playlist) -> str:
+    def create_m3u(self, playlist: Playlist, username) -> str:
         """Creates an M3U file for the given playlist and returns the file path."""
         if not os.path.exists(self.m3u_path):
             os.makedirs(self.m3u_path)
 
-        m3u_file_path = os.path.join(self.m3u_path, f"{playlist.title}.m3u")
+        m3u_file_path = os.path.join(
+            self.m3u_path, username, f"{playlist.title}.m3u")
         with open(m3u_file_path, "w") as m3u_file:
             m3u_file.write("#EXTM3U\n")
             for track in playlist.tracks:
@@ -40,7 +41,7 @@ class PlexHandler:
 
     def create(self, playlist: Playlist, username, collection: bool = False):
         """Create or update a Plex playlist or collection."""
-        m3u_file = self.create_m3u(playlist)
+        m3u_file = self.create_m3u(playlist, username)
 
         try:
             temp_playlist = self.plex_server.createPlaylist(
@@ -83,6 +84,9 @@ class PlexHandler:
                         logging.info(
                             f"Updating existing Plex playlist '{playlist.title}'")
                         pl.removeItems(pl.items())
+                        pl.addItems(items=items)
+                        pl.uploadPoster(url=playlist.poster)
+                        pl.summary(summary=playlist.summary)
                 except:
                     logging.info(
                         f"Creating new Plex playlist '{playlist.title}'")
