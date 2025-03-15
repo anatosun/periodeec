@@ -62,7 +62,6 @@ class PlexHandler:
             except:
                 logging.info(
                     f"Creating new Plex collection '{playlist.title}'")
-                pass
 
             try:
                 col = self.plex_server.createCollection(
@@ -76,28 +75,28 @@ class PlexHandler:
         else:
             try:
                 plex_instance = self.get_plex_instance_for_user(username)
+                pl: PlexPlaylist
+                try:
+                    res = plex_instance.playlist(title=playlist.title)
+                    if res:
+                        pl = res
+                        logging.info(
+                            f"Updating existing Plex playlist '{playlist.title}'")
+                        pl.removeItems(pl.items())
+                except:
+                    logging.info(
+                        f"Creating new Plex playlist '{playlist.title}'")
+                    try:
+                        pl = plex_instance.createPlaylist(
+                            playlist.title, items=items, smart=False)
+                        pl.uploadPoster(url=playlist.poster)
+                        pl.summary(summary=playlist.summary)
+                    except Exception as e:
+                        logging.error(
+                            f"Error creating playlist {playlist.title} {e}")
             except Exception as e:
                 logging.error(
                     f"Failed to switch to Plex user '{username}': {e}")
-                return False
-            pl: PlexPlaylist
-            try:
-                res = plex_instance.playlist(title=playlist.title)
-                if res:
-                    pl = res
-                    logging.info(
-                        f"Updating existing Plex playlist '{playlist.title}'")
-                    pl.removeItems(pl.items())
-            except:
-                logging.info(f"Creating new Plex playlist '{playlist.title}'")
-                try:
-                    pl = plex_instance.createPlaylist(
-                        playlist.title, items=items, smart=False)
-                    pl.uploadPoster(url=playlist.poster)
-                    pl.summary(summary=playlist.summary)
-                except Exception as e:
-                    logging.error(
-                        f"Error creating playlist {playlist.title} {e}")
 
         try:
             temp_playlist.delete()
