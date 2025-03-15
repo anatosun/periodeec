@@ -58,11 +58,11 @@ def sync_playlist_to_plex(playlist: Playlist, username: User, plex_handler: Plex
                             path=path, isrc=track.isrc, fallback_album_query=f"{track.artist} {track.album}"
                         )
                         if success:
-                            success, path = bt.add(download_path, track.isrc)
+                            success, path = bt.add(path, track.isrc)
                             if success:
                                 track.path = path
                             else:
-                                success, path = bt.add(download_path)
+                                success, path = bt.add(path)
                                 if success:
                                     track.path = path
                         else:
