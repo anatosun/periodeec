@@ -21,7 +21,7 @@ class PlexHandler:
             return self.plex_server.switchUser(username)
         return self.plex_server
 
-    def create_m3u(self, playlist: Playlist, username) -> str:
+    def create_m3u(self, playlist: Playlist, username: str) -> str:
         """Creates an M3U file for the given playlist and returns the file path."""
         m3u_path = os.path.join(self.m3u_path, username)
         if not os.path.exists(m3u_path):
