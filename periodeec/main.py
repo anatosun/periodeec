@@ -53,16 +53,16 @@ def sync_playlist_to_plex(playlist: Playlist, username: User, plex_handler: Plex
                     for downloader in downloaders.values():
                         hash = hashlib.sha256(
                             f"{track.artist}{track.album}{downloader}".encode()).hexdigest()[:]
-                        path = os.path.join(download_path, hash)
+                        dl_path = os.path.join(download_path, hash)
                         success, path, err = downloader.enqueue(
-                            path=path, isrc=track.isrc, fallback_album_query=f"{track.artist} {track.album}"
+                            path=dl_path, isrc=track.isrc, fallback_album_query=f"{track.artist} {track.album}"
                         )
                         if success:
-                            success, path = bt.add(path, track.isrc)
+                            success, path = bt.add(dl_path, track.isrc)
                             if success:
                                 track.path = path
                             else:
-                                success, path = bt.add(path)
+                                success, path = bt.add(dl_path)
                                 if success:
                                     track.path = path
                         else:
