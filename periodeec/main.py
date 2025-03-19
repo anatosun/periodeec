@@ -1,7 +1,7 @@
 from plexapi.server import PlexServer
 from spotipy_anon import SpotifyAnon
 from spotipy import Spotify
-import periodeec.beets as beets
+from periodeec.beets_handler import BeetsHandler
 from periodeec.plex_handler import PlexHandler
 from dataclasses import dataclass
 import os
@@ -33,19 +33,19 @@ logging.basicConfig(
     level=logging.INFO)
 
 
-def sync_playlist_to_plex(playlist: Playlist, plex_users: list, plex_handler: PlexHandler, spotify_handler: SpotifyHandler, bt, downloaders, download_path, collection=False):
-    """Handles the process of fetching, matching, and syncing a Spotify playlist to Plex."""
-    logging.info(f"Syncing playlist '{playlist.title}' to Plex")
-    spotify_handler.populate_playlist(playlist)
+def sync_user(user: User, spotify_handler: SpotifyHandler, plex_handler: PlexHandler, bt: BeetsHandler, download_path: str, downloaders: dict):
+    spotify_username = user.spotify_username
+    plex_users = user.sync_to_plex_users
+    playlists = spotify_handler.fetch_playlists_from_user(spotify_username)
 
-    for track in playlist.tracks:
-        exists, path = bt.exists(
-            track.isrc, fuzzy=False, artist=track.artist, title=track.title)
-        if exists:
-            track.path = path
-        else:
-            exists, path = bt.exists(
-                track.isrc, fuzzy=True, artist=track.artist, title=track.title)
+    for playlist in playlists:
+        spotify_handler.populate_playlist(playlist)
+
+        for track in playlist.tracks:
+            exists, path = bt.exists(track.isrc, fuzzy=False)
+            if not exists:
+                exists, path = bt.exists(
+                    track.isrc, fuzzy=False, artist=track.artist, title=track.title)
             if exists:
                 track.path = path
             else:
@@ -67,24 +67,16 @@ def sync_playlist_to_plex(playlist: Playlist, plex_users: list, plex_handler: Pl
                                     track.path = path
                         else:
                             logging.error(err)
-    for username in plex_users:
-        plex_handler.create(playlist, username, collection)
+        for username in plex_users:
+            plex_handler.create(playlist, username, False)
 
 
 def sync(spotify_handler, plex_handler, config, bt, downloaders, settings):
     """Syncs Spotify playlists and users to Plex using the correct logic."""
     if config.usernames:
-        for username in config.usernames.keys():
-            user = config.usernames[username]
-            plex_users = user.sync_to_plex_users
-            playlists = spotify_handler.fetch_playlists_from_user(
-                user.spotify_username)
-            for playlist in playlists:
-                schedule.every(user.schedule).minutes.do(
-                    lambda pl=playlist: sync_playlist_to_plex(
-                        pl, plex_users, plex_handler, spotify_handler, bt, downloaders, settings.downloads
-                    )
-                )
+        for user in config.usernames.values():
+            schedule.every(user.schedule).minutes.do(
+                sync_user, user, spotify_handler, plex_handler, bt, settings.downloads, downloaders)
 
 
 def main():
@@ -110,7 +102,7 @@ def main():
         downloaders[client] = class_(
             **settings.clients[client]) if settings.clients[client] else class_()
 
-    bt = beets.Beets(settings.music)
+    bt = BeetsHandler(settings.music)
 
     spotify_handler = SpotifyHandler(**config.settings.spotify)
     plex_handler = PlexHandler(settings.plex["baseurl"], settings.plex["token"],

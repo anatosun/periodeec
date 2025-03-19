@@ -3,7 +3,7 @@ import os
 import logging
 
 
-class Beets():
+class BeetsHandler():
 
     def __init__(self, library_path="/music"):
         config_path = os.path.join(os.environ["HOME"], "beets")
