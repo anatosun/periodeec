@@ -1,11 +1,9 @@
 import os
-import json
 import logging
 from plexapi.server import PlexServer
 from plexapi.collection import Collection as PlexCollection
 from plexapi.playlist import Playlist as PlexPlaylist
 from periodeec.playlist import Playlist
-from periodeec.track import Track
 
 
 class PlexHandler:
