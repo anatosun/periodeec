@@ -84,6 +84,7 @@ class PlexHandler:
                 pl: PlexPlaylist
                 try:
                     res = plex_instance.playlist(title=playlist.title)
+
                     if res:
                         pl = res
                         logging.info(
@@ -92,6 +93,9 @@ class PlexHandler:
                         pl.addItems(items=items)
                         pl.uploadPoster(url=playlist.poster)
                         pl.editSummary(summary=playlist.summary)
+                    else:
+                        logging.error(
+                            "Failed to fetch Plex playlist '{playlist.title}' for '{username}', result is '{res}'")
                 except Exception as e:
                     logging.info(
                         f"Creating new Plex playlist '{playlist.title}' for '{username}': {e}")
