@@ -1,7 +1,7 @@
 import os
 import logging
 from qobuz_dl.core import QobuzDL
-logging.basicConfig(level=logging.ERROR)
+logging.basicConfig(level=logging.INFO)
 
 
 class Qobuz:
