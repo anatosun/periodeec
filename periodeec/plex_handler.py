@@ -32,7 +32,7 @@ class PlexHandler:
         if not os.path.exists(m3u_path):
             os.makedirs(m3u_path)
 
-        m3u_file_path = os.path.join(m3u_path,  title)
+        m3u_file_path = os.path.join(m3u_path,  f"{title}.m3u)
         with open(m3u_file_path, "w") as m3u_file:
             m3u_file.write("#EXTM3U\n")
             for track in playlist.tracks:
