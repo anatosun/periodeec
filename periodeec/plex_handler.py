@@ -1,4 +1,5 @@
 import os
+import re
 import logging
 from plexapi.server import PlexServer
 from plexapi.collection import Collection as PlexCollection
@@ -22,11 +23,16 @@ class PlexHandler:
     def create_m3u(self, playlist: Playlist, username: str) -> str:
         """Creates an M3U file for the given playlist and returns the file path."""
 
+        title = playlist.title
+
+        re.sub(r'[^\w_. -]', '_', username)
+        re.sub(r'[^\w_. -]', '_', title)
+
         m3u_path = os.path.join(self.m3u_path, username)
         if not os.path.exists(m3u_path):
             os.makedirs(m3u_path)
 
-        m3u_file_path = os.path.join(m3u_path,  f"{playlist.title}.m3u")
+        m3u_file_path = os.path.join(m3u_path,  title)
         with open(m3u_file_path, "w") as m3u_file:
             m3u_file.write("#EXTM3U\n")
             for track in playlist.tracks:
