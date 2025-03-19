@@ -45,7 +45,7 @@ def sync_user(user: User, spotify_handler: SpotifyHandler, plex_handler: PlexHan
             exists, path = bt.exists(track.isrc, fuzzy=False)
             if not exists:
                 exists, path = bt.exists(
-                    track.isrc, fuzzy=False, artist=track.artist, title=track.title)
+                    track.isrc, fuzzy=True, artist=track.artist, title=track.title)
             if exists:
                 track.path = path
             else:
