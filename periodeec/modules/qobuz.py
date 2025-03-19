@@ -1,14 +1,17 @@
 import os
+import logging
 from qobuz_dl.core import QobuzDL
+logging.basicConfig(level=logging.ERROR)
 
 
 class Qobuz:
 
     def __init__(self, email, password):
-        self.qobuz = QobuzDL(quality=27, embed_art=True, cover_og_quality=False)
+        self.qobuz = QobuzDL(quality=27, embed_art=True,
+                             cover_og_quality=False)
         self.qobuz.get_tokens()
         self.qobuz.initialize_client(
-                str(email), str(password), self.qobuz.app_id, self.qobuz.secrets)
+            str(email), str(password), self.qobuz.app_id, self.qobuz.secrets)
 
     def enqueue(self, path: str, isrc=None, link=None, fallback_album_query=None) -> tuple[bool, str, str]:
 
