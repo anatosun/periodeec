@@ -39,10 +39,8 @@ def match(bt: BeetsHandler, track: Track):
     if exists:
         return exists, path
 
-    exists, path = bt.exists(track.isrc, fuzzy=True,
-                             artist=track.artist, title=track.title)
-
-    return exists, path
+    return bt.exists(track.isrc, fuzzy=True,
+                     artist=track.artist, title=track.title)
 
 
 def sync_user(user: User, spotify_handler: SpotifyHandler, plex_handler: PlexHandler, bt: BeetsHandler, download_path: str, downloaders: dict):
