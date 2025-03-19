@@ -13,6 +13,7 @@ import time
 import hashlib
 from periodeec.config import Config, Settings, User
 from periodeec.playlist import Playlist
+from periodeec.track import Track
 from periodeec.spotify_handler import SpotifyHandler
 import colorama
 colorama.init(strip=True, convert=False)
@@ -33,6 +34,17 @@ logging.basicConfig(
     level=logging.INFO)
 
 
+def match(bt: BeetsHandler, track: Track):
+    exists, path = bt.exists(track.isrc, fuzzy=False)
+    if exists:
+        return exists, path
+
+    exists, path = bt.exists(track.isrc, fuzzy=True,
+                             artist=track.artist, title=track.title)
+
+    return exists, path
+
+
 def sync_user(user: User, spotify_handler: SpotifyHandler, plex_handler: PlexHandler, bt: BeetsHandler, download_path: str, downloaders: dict):
     spotify_username = user.spotify_username
     plex_users = user.sync_to_plex_users
@@ -42,10 +54,7 @@ def sync_user(user: User, spotify_handler: SpotifyHandler, plex_handler: PlexHan
         spotify_handler.populate_playlist(playlist)
 
         for track in playlist.tracks:
-            exists, path = bt.exists(track.isrc, fuzzy=False)
-            if not exists:
-                exists, path = bt.exists(
-                    track.isrc, fuzzy=True, artist=track.artist, title=track.title)
+            exists, path = match(bt, track)
             if exists:
                 track.path = path
             else:
@@ -57,16 +66,15 @@ def sync_user(user: User, spotify_handler: SpotifyHandler, plex_handler: PlexHan
                         success, path, err = downloader.enqueue(
                             path=dl_path, isrc=track.isrc, fallback_album_query=f"{track.artist} {track.album}"
                         )
+
                         if success:
-                            success, path = bt.add(dl_path, track.isrc)
+                            success, err = bt.add(dl_path, track.isrc)
                             if success:
-                                track.path = path
-                            else:
-                                success, path = bt.add(dl_path)
-                                if success:
-                                    track.path = path
-                        else:
+                                exists, path = match(bt, track)
+
+                        if not success or not exists:
                             logging.error(err)
+
         for username in plex_users:
             plex_handler.create(playlist, username, False)
 
