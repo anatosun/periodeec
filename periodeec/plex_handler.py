@@ -23,6 +23,7 @@ class PlexHandler:
 
     def create_m3u(self, playlist: Playlist, username: str) -> str:
         """Creates an M3U file for the given playlist and returns the file path."""
+
         m3u_path = os.path.join(self.m3u_path, username)
         if not os.path.exists(m3u_path):
             os.makedirs(m3u_path)
@@ -82,11 +83,11 @@ class PlexHandler:
                     if res:
                         pl = res
                         logging.info(
-                            f"Updating existing Plex playlist '{playlist.title}'")
+                            f"Updating existing Plex playlist '{playlist.title}' for '{username}'")
                         pl.removeItems(pl.items())
                         pl.addItems(items=items)
                         pl.uploadPoster(url=playlist.poster)
-                        pl.summary(summary=playlist.summary)
+                        pl.editSummary(summary=playlist.summary)
                 except:
                     logging.info(
                         f"Creating new Plex playlist '{playlist.title}'")
@@ -94,10 +95,10 @@ class PlexHandler:
                         pl = plex_instance.createPlaylist(
                             playlist.title, items=items, smart=False)
                         pl.uploadPoster(url=playlist.poster)
-                        pl.summary(summary=playlist.summary)
+                        pl.editSummary(summary=playlist.summary)
                     except Exception as e:
                         logging.error(
-                            f"Error creating playlist {playlist.title} {e}")
+                            f"Error creating playlist {playlist.title} {e} for '{username}'")
             except Exception as e:
                 logging.error(
                     f"Failed to switch to Plex user '{username}': {e}")
