@@ -11,11 +11,11 @@ class BeetsHandler():
             os.makedirs(config_path)
 
         self.config_file_path = os.path.join(config_path, "config.yaml")
-        logging.info(f"Beets library initialized at {library_path}")
+        logging.debug(f"Beets library initialized at {library_path}")
 
     def exists(self, isrc: str, fuzzy=False, artist="", title="") -> tuple[bool, str]:
         """Checks if a track exists in the Beets library by ISRC or using a fuzzy search."""
-        logging.info(
+        logging.debug(
             f"Checking existence of track: ISRC={isrc}, fuzzy={fuzzy}, artist={artist}, title={title}")
 
         if fuzzy:
@@ -34,15 +34,15 @@ class BeetsHandler():
 
         output = result.stdout.decode("utf-8").strip()
         if not output:
-            logging.info("Track not found in Beets library.")
+            logging.debug("Track not found in Beets library.")
             return False, ""
 
-        logging.info(f"Track found: {output}")
+        logging.debug(f"Track found: {output}")
         return True, output.split("\n")[0][1:-1]
 
     def add(self, path: str, search_id="") -> tuple[bool, str]:
         """Attempts to add a track to the Beets library."""
-        logging.info(
+        logging.debug(
             f"Adding track to Beets: path={path}, search_id={search_id}")
 
         if search_id == "":
@@ -75,5 +75,5 @@ class BeetsHandler():
             else:
                 return self.add(path, "")
 
-        logging.info("Track successfully added to Beets library.")
+        logging.debug("Track successfully added to Beets library.")
         return True, ""
