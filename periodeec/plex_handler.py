@@ -25,8 +25,8 @@ class PlexHandler:
 
         title = playlist.title
 
-        re.sub(r'[^\w_. -]', '_', username)
-        re.sub(r'[^\w_. -]', '_', title)
+        re.sub(r'[^\w_. -/]', '_', username)
+        re.sub(r'[^\w_. -/]', '_', title)
 
         m3u_path = os.path.join(self.m3u_path, username)
         if not os.path.exists(m3u_path):
