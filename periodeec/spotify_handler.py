@@ -5,6 +5,9 @@ from periodeec.playlist import Playlist
 from periodeec.track import Track
 import os
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
 
 class SpotifyHandler:
     def __init__(self, client_id: str, client_secret: str, path="/config/.playlists"):
@@ -35,7 +38,7 @@ class SpotifyHandler:
         try:
             playlist_data = self.sp.playlist(playlist_id=playlist_id)
         except Exception as e:
-            logging.error(f"{error_msg}: {e}")
+            logger.error(f"{error_msg}: {e}")
             return tracks
 
         if not playlist_data or not playlist_data.get("tracks") or not playlist_data["tracks"].get("items"):
@@ -59,17 +62,17 @@ class SpotifyHandler:
         """
         Fetches all playlists from a Spotify user and returns a list of Playlist objects.
         """
-        logging.info(f"Fetching playlists for user {username}")
+        logger.info(f"Fetching playlists for user {username}")
         limit, total = 50, 0
 
         try:
             playlists_data = self.sp.user_playlists(username, limit=limit)
             if not playlists_data or not playlists_data.get("items"):
-                logging.error(f"Skipping user {username}: No playlists found")
+                logger.error(f"Skipping user {username}: No playlists found")
                 return []
             total = playlists_data["total"]
         except Exception as e:
-            logging.error(f"Skipping user {username}: {e}")
+            logger.error(f"Skipping user {username}: {e}")
             return []
 
         playlists = []
@@ -89,6 +92,6 @@ class SpotifyHandler:
                 )
                 playlists.append(playlist_obj)
 
-        logging.info(
+        logger.info(
             f"Fetched {len(playlists)}/{total} playlists for user {username}")
         return playlists

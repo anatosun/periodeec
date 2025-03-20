@@ -6,6 +6,9 @@ from plexapi.collection import Collection as PlexCollection
 from plexapi.playlist import Playlist as PlexPlaylist
 from periodeec.playlist import Playlist
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
 
 class PlexHandler:
     def __init__(self, baseurl: str, token: str, section: str = "Music", m3u_path: str = "m3u"):
@@ -43,21 +46,22 @@ class PlexHandler:
                         f"#EXTINF:-1,{track.artist} - {track.title}\n")
                     m3u_file.write(f"{track.path}\n")
 
-        logging.info(f"Created M3U file: {m3u_file_path}")
+        logger.info(f"Created M3U file: {m3u_file_path}")
         return m3u_file_path
 
-    def create(self, playlist: Playlist, username, collection: bool = False):
+    def create(self, playlist: Playlist, username, collection: bool = False) -> bool:
         """Create or update a Plex playlist or collection."""
         m3u_file = self.create_m3u(playlist, username)
+        success = False
 
         try:
             temp_playlist = self.plex_server.createPlaylist(
                 title=f"{playlist.title} (temp)", section=self.section, m3ufilepath=m3u_file)
             items = temp_playlist.items()
         except Exception as e:
-            logging.error(
+            logger.error(
                 f"Failed to create temporary playlist '{playlist.title}': {e}")
-            return None
+            return False
 
         if collection:
             col: PlexCollection
@@ -65,10 +69,10 @@ class PlexHandler:
                 col = self.plex_server.library.section(
                     self.section).collection(title=playlist.title)
                 col.delete()
-                logging.info(
+                logger.info(
                     f"Updating existing Plex collection '{playlist.title}'")
             except:
-                logging.info(
+                logger.info(
                     f"Creating new Plex collection '{playlist.title}'")
 
             try:
@@ -76,9 +80,11 @@ class PlexHandler:
                     title=playlist.title, section=self.section, items=items)
                 col.uploadPoster(url=playlist.poster)
                 col.editSummary(summary=playlist.summary)
+                success = True
             except Exception as e:
-                logging.error(
+                logger.error(
                     f"Failed to create collection {playlist.title}: {e}")
+                success = False
 
         else:
             try:
@@ -89,7 +95,7 @@ class PlexHandler:
 
                     if res is not None:
                         pl = res
-                        logging.info(
+                        logger.info(
                             f"Updating existing Plex playlist '{playlist.title}' for '{username}'")
                         pl.removeItems(pl.items())
                         pl.addItems(items=items)
@@ -97,10 +103,10 @@ class PlexHandler:
                         pl.editSummary(summary=playlist.summary)
 
                     else:
-                        logging.error(
+                        logger.error(
                             f"Failed to fetch Plex playlist '{playlist.title}' for '{username}', result is '{res}'")
                 except Exception as e:
-                    logging.info(
+                    logger.info(
                         f"Creating new Plex playlist '{playlist.title}' for '{username}': {e}")
                     try:
                         pl = plex_instance.createPlaylist(
@@ -108,13 +114,8 @@ class PlexHandler:
                         pl.uploadPoster(url=playlist.poster)
                         pl.editSummary(summary=playlist.summary)
                     except Exception as e:
-                        logging.error(
+                        logger.error(
                             f"Error creating playlist {playlist.title} {e} for '{username}'")
             except Exception as e:
-                logging.error(
+                logger.error(
                     f"Failed to switch to Plex user '{username}': {e}")
-
-        try:
-            temp_playlist.delete()
-        except Exception as e:
-            logging.error(f"Error deleting temp playlist {e}")

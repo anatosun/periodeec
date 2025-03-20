@@ -2,6 +2,8 @@ from periodeec.track import Track
 import logging
 import json
 import os
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 class Playlist:
@@ -22,7 +24,7 @@ class Playlist:
         self.path = os.path.join(os.path.abspath(path), f"{id}.json")
         try:
             if os.path.exists(self.path):
-                logging.info(
+                logger.info(
                     f"Playlist {self.title} exists at path {self.path}")
                 with open(self.path, "r") as f:
                     data = json.load(f)
@@ -32,12 +34,12 @@ class Playlist:
 
                     if data["snapshot_id"] == self.snapshot_id:
                         self.uptodate = True
-                        logging.info(f"Playlist {self.title} is up-to-date")
+                        logger.info(f"Playlist {self.title} is up-to-date")
                     if data.get("users") is not None:
                         self.users = data["users"]
 
         except Exception as e:
-            logging.error(e)
+            logger.error(e)
 
     def save(self):
         with open(self.path, "w") as f:

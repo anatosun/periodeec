@@ -28,10 +28,9 @@ class Environment:
 env = Environment(os.getenv("PD_CONFIG", "/config"),
                   bool(os.getenv("PD_RUN", False)))
 
-logging.basicConfig(
-    format='%(asctime)s %(message)s',
-    datefmt='%m/%d/%Y %I:%M:%S %p',
-    level=logging.INFO)
+logging.basicConfig(level=logging.ERROR)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 def match(bt: BeetsHandler, track: Track):
@@ -53,7 +52,7 @@ def sync_user(user: User, spotify_handler: SpotifyHandler, plex_handler: PlexHan
     for playlist in playlists:
 
         if playlist.is_up_to_date():
-            logging.info(
+            logger.info(
                 f"Playlist {playlist.title} is the most recent version")
             upd = True
 
@@ -83,16 +82,17 @@ def sync_user(user: User, spotify_handler: SpotifyHandler, plex_handler: PlexHan
                                         exists, path = match(bt, track)
 
                                 if not success or not exists:
-                                    logging.error(err)
+                                    logger.error(err)
 
         for username in plex_users:
             if playlist.is_up_to_date_for(username):
-                logging.info(
+                logger.info(
                     f"Playlist {playlist.title} is up-to-date for {username}.")
                 continue
-            plex_handler.create(playlist, username, False)
-            playlist.update_for(username)
-            playlist.save()
+            success = plex_handler.create(playlist, username, False)
+            if success:
+                playlist.update_for(username)
+                playlist.save()
 
 
 def sync(spotify_handler, plex_handler, config, bt, downloaders, settings):
@@ -109,7 +109,7 @@ def main():
 
     settings_data = data.get('settings')
     if not settings_data:
-        logging.error(f"Settings not found in {env.config}/config.yaml")
+        logger.error(f"Settings not found in {env.config}/config.yaml")
         return
 
     settings = Settings(**settings_data)
@@ -121,10 +121,17 @@ def main():
 
     downloaders = {}
     for client in settings.clients:
+        logger.info(f"Importing module {client}")
         module = f"periodeec.modules.{client}"
+        logging.getLogger(client).setLevel(logging.WARNING)
         class_ = getattr(importlib.import_module(module), client.capitalize())
         downloaders[client] = class_(
             **settings.clients[client]) if settings.clients[client] else class_()
+        logging.getLogger(client).setLevel(logging.WARNING)
+
+    for log_name, _ in logging.Logger.manager.loggerDict.items():
+        if log_name != 'periodeec':
+            logging.getLogger(log_name).setLevel(logging.WARNING)
 
     bt = BeetsHandler(settings.music)
 
