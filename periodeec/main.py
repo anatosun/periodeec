@@ -47,39 +47,43 @@ def match(bt: BeetsHandler, track: Track):
 def sync_user(user: User, spotify_handler: SpotifyHandler, plex_handler: PlexHandler, bt: BeetsHandler, download_path: str, downloaders: dict):
     spotify_username = user.spotify_username
     plex_users = user.sync_to_plex_users
-    playlists = spotify_handler.fetch_playlists_from_user(spotify_username)
+    playlists = spotify_handler.playlists(spotify_username)
     upd = False
 
     for playlist in playlists:
+
         if playlist.is_up_to_date():
+            logging.info(
+                f"Playlist {playlist.title} is the most recent version")
             upd = True
 
         if not upd:
-            spotify_handler.populate_playlist(playlist)
+            tracks = spotify_handler.tracks(playlist.url)
+            playlist.tracks = playlist.update_tracklist(
+                tracks, playlist.tracks)
 
             for track in playlist.tracks:
-                exists, path = match(bt, track)
-                if exists:
-                    track.path = path
-                else:
-                    if download_path and downloaders:
-                        for downloader in downloaders.values():
-                            hash = hashlib.sha256(
-                                f"{track.artist}{track.album}{downloader}".encode()).hexdigest()[:]
-                            dl_path = os.path.join(download_path, hash)
-                            success, path, err = downloader.enqueue(
-                                path=dl_path, isrc=track.isrc, fallback_album_query=f"{track.artist} {track.album}"
-                            )
+                if track.path is None or track.path == "":
+                    exists, path = match(bt, track)
+                    if exists:
+                        track.path = path
+                    else:
+                        if download_path and downloaders:
+                            for downloader in downloaders.values():
+                                hash = hashlib.sha256(
+                                    f"{track.artist}{track.album}{downloader}".encode()).hexdigest()[:]
+                                dl_path = os.path.join(download_path, hash)
+                                success, path, err = downloader.enqueue(
+                                    path=dl_path, isrc=track.isrc, fallback_album_query=f"{track.artist} {track.album}"
+                                )
 
-                            if success:
-                                success, err = bt.add(dl_path, track.isrc)
                                 if success:
-                                    exists, path = match(bt, track)
+                                    success, err = bt.add(dl_path, track.isrc)
+                                    if success:
+                                        exists, path = match(bt, track)
 
-                            if not success or not exists:
-                                logging.error(err)
-
-            playlist.save()
+                                if not success or not exists:
+                                    logging.error(err)
 
         for username in plex_users:
             if playlist.is_up_to_date_for(username):

@@ -24,28 +24,23 @@ class SpotifyHandler:
         if not os.path.exists(self.path):
             os.makedirs(self.path)
 
-    def fetch_playlist_tracks(self, url: str) -> Playlist:
+    def tracks(self, url: str) -> list:
         """
         Fetches all tracks from a Spotify playlist and returns a Playlist object.
         """
         playlist_id = url.split("/")[-1]
         error_msg = f"Skipping playlist '{url}'"
+        tracks = []
 
         try:
             playlist_data = self.sp.playlist(playlist_id=playlist_id)
         except Exception as e:
             logging.error(f"{error_msg}: {e}")
-            return Playlist(title="Unknown", tracks=[], url=url, id="0", path=self.path)
+            return tracks
 
         if not playlist_data or not playlist_data.get("tracks") or not playlist_data["tracks"].get("items"):
-            logging.error(f"{error_msg}: No tracks found")
-            if playlist_data and playlist_data.get("name"):
-                title = playlist_data["name"]
-            else:
-                title = "None"
-            return Playlist(title=title, tracks=[], url=url, id="0", path=self.path)
+            return tracks
 
-        tracks = []
         for item in playlist_data["tracks"]["items"]:
             track_info = item.get("track")
             if track_info and track_info.get("external_ids") and track_info["external_ids"].get("isrc"):
@@ -58,20 +53,9 @@ class SpotifyHandler:
                 )
                 tracks.append(track)
 
-        return Playlist(
-            title=playlist_data["name"],
-            tracks=tracks,
-            id=playlist_data["id"],
-            path=self.path,
-            description=playlist_data.get("description", ""),
-            snapshot_id=playlist_data.get("snapshot_id", ""),
-            poster=playlist_data["images"][0]["url"] if playlist_data.get(
-                "images") else "",
-            summary=playlist_data.get("description", ""),
-            url=playlist_data["external_urls"]["spotify"]
-        )
+        return tracks
 
-    def fetch_playlists_from_user(self, username: str) -> list[Playlist]:
+    def playlists(self, username: str) -> list[Playlist]:
         """
         Fetches all playlists from a Spotify user and returns a list of Playlist objects.
         """
@@ -108,10 +92,3 @@ class SpotifyHandler:
         logging.info(
             f"Fetched {len(playlists)}/{total} playlists for user {username}")
         return playlists
-
-    def populate_playlist(self, playlist: Playlist):
-        """
-        Populates a given playlist with its corresponding tracks.
-        """
-        detailed_playlist = self.fetch_playlist_tracks(playlist.url)
-        playlist.tracks = detailed_playlist.tracks

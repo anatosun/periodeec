@@ -11,14 +11,28 @@ class Playlist:
         """
         self.title = title
         self.tracks = tracks  # List of Track objects
+        self.uptodate = False
         self.description = description
         self.snapshot_id = snapshot_id  # Unique identifier for updates
         self.poster = poster  # Playlist poster image URL
         self.summary = summary  # Playlist summary/description
         self.url = url  # Link to the original Spotify playlist
         self.id = id
-        self.path = os.path.join(os.path.abspath(path), f"{id}.json")
         self.users = {}
+        self.path = os.path.join(os.path.abspath(path), f"{id}.json")
+        try:
+            if os.path.exists(self.path):
+                with open(self.path, "r") as f:
+                    data = json.load(f)
+                    if data.get("tracks") is not None:
+                        self.tracks = data["tracks"]
+                    if data["snapshot_id"] == self.snapshot_id:
+                        self.uptodate = True
+                    if data.get("users") is not None:
+                        self.users = data["users"]
+
+        except Exception as e:
+            logging.error(e)
 
     def save(self):
         with open(self.path, "w") as f:
@@ -28,40 +42,24 @@ class Playlist:
         self.users[username] = self.snapshot_id
 
     def is_up_to_date(self):
-        try:
-            if os.path.exists(self.path):
-                with open(self.path, "r") as f:
-                    data = json.load(f)
-                    if data["snapshot_id"] == self.snapshot_id:
-                        logging.info(f"{self.title}: already downloaded")
-                        return True
-        except Exception as e:
-            logging.error(e)
-            return False
+        return self.uptodate
 
-        return False
+    def update_tracklist(self, tracks, old_tracks):
+
+        for track in tracks:
+            for old in old_tracks:
+                if track.isrc == old.isrc:
+                    track.path = old.path
+                    break
+
+        return tracks
 
     def is_up_to_date_for(self, username):
-        try:
-            if os.path.exists(self.path):
-                with open(self.path, "r") as f:
-                    data = json.load(f)
 
-                    if data.get("users") is None:
-                        return False
-                    else:
-                        self.users = data["users"]
-
-                    if self.users.get(username) is None:
-                        return False
-
-                    if self.users.get(username) == self.snapshot_id:
-                        return True
-        except Exception as e:
-            logging.error(e)
+        if self.users.get(username) is None:
             return False
 
-        return False
+        return self.users[username] == self.snapshot_id
 
     def __repr__(self):
         return f"Playlist(title={self.title}, tracks={len(self.tracks)}, description={self.description}, snapshot_id={self.snapshot_id}, poster={self.poster}, summary={self.summary}, url={self.url})"
