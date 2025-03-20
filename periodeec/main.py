@@ -52,7 +52,6 @@ def sync_user(user: User, spotify_handler: SpotifyHandler, plex_handler: PlexHan
     plex_users = user.sync_to_plex_users
     logger.info(f"Syncing user {spotify_username} to {plex_users}")
     playlists = spotify_handler.playlists(spotify_username)
-    upd = False
 
     for playlist in playlists:
         logger.info(f"Syncing playlist {playlist.title}")
@@ -60,11 +59,10 @@ def sync_user(user: User, spotify_handler: SpotifyHandler, plex_handler: PlexHan
         if playlist.is_up_to_date():
             logger.info(
                 f"Playlist {playlist.title} is the most recent version")
-            upd = True
-
-        if not upd:
+        else:
             logger.info(f"Updating playlist {playlist.title}")
             tracks = spotify_handler.tracks(playlist.url)
+            logger.info(f"Fetched {len(tracks)} from Spotify")
             playlist.tracks = playlist.update_tracklist(
                 tracks, playlist.tracks)
 
