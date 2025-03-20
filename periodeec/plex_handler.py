@@ -4,7 +4,6 @@ from plexapi.server import PlexServer
 from plexapi.collection import Collection as PlexCollection
 from plexapi.playlist import Playlist as PlexPlaylist
 from periodeec.playlist import Playlist
-import urllib.parse
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
