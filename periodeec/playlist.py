@@ -29,8 +29,9 @@ class Playlist:
                 with open(self.path, "r") as f:
                     data = json.load(f)
                     if data.get("tracks") is not None:
-                        tracks = data["tracks"]
-                        self.tracks = [Track(**track) for track in tracks]
+                        self.tracks = [Track(**track)
+                                       for track in data["tracks"]]
+                        logging.info(f"Loaded {len(self.tracks)} from cache")
 
                     if data["snapshot_id"] == self.snapshot_id:
                         self.uptodate = True
