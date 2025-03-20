@@ -1,6 +1,10 @@
 import os
 import logging
 from qobuz_dl.core import QobuzDL
+
+# Suppress logs from qobuz_dl
+logging.getLogger("qobuz_dl").setLevel(logging.CRITICAL)
+logging.getLogger("qobuz_dl").propagate = False
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.ERROR)
 
