@@ -48,35 +48,38 @@ def sync_user(user: User, spotify_handler: SpotifyHandler, plex_handler: PlexHan
     spotify_username = user.spotify_username
     plex_users = user.sync_to_plex_users
     playlists = spotify_handler.fetch_playlists_from_user(spotify_username)
+    upd = False
 
     for playlist in playlists:
         if playlist.is_up_to_date():
-            continue
-        spotify_handler.populate_playlist(playlist)
+            upd = True
 
-        for track in playlist.tracks:
-            exists, path = match(bt, track)
-            if exists:
-                track.path = path
-            else:
-                if download_path and downloaders:
-                    for downloader in downloaders.values():
-                        hash = hashlib.sha256(
-                            f"{track.artist}{track.album}{downloader}".encode()).hexdigest()[:]
-                        dl_path = os.path.join(download_path, hash)
-                        success, path, err = downloader.enqueue(
-                            path=dl_path, isrc=track.isrc, fallback_album_query=f"{track.artist} {track.album}"
-                        )
+        if not upd:
+            spotify_handler.populate_playlist(playlist)
 
-                        if success:
-                            success, err = bt.add(dl_path, track.isrc)
+            for track in playlist.tracks:
+                exists, path = match(bt, track)
+                if exists:
+                    track.path = path
+                else:
+                    if download_path and downloaders:
+                        for downloader in downloaders.values():
+                            hash = hashlib.sha256(
+                                f"{track.artist}{track.album}{downloader}".encode()).hexdigest()[:]
+                            dl_path = os.path.join(download_path, hash)
+                            success, path, err = downloader.enqueue(
+                                path=dl_path, isrc=track.isrc, fallback_album_query=f"{track.artist} {track.album}"
+                            )
+
                             if success:
-                                exists, path = match(bt, track)
+                                success, err = bt.add(dl_path, track.isrc)
+                                if success:
+                                    exists, path = match(bt, track)
 
-                        if not success or not exists:
-                            logging.error(err)
+                            if not success or not exists:
+                                logging.error(err)
 
-        playlist.save()
+            playlist.save()
 
         for username in plex_users:
             if playlist.is_up_to_date_for(username):

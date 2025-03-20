@@ -28,29 +28,39 @@ class Playlist:
         self.users[username] = self.snapshot_id
 
     def is_up_to_date(self):
-        if os.path.exists(self.path):
-            with open(self.path, "r") as f:
-                data = json.load(f)
-                if data["snapshot_id"] == self.snapshot_id:
-                    logging.info(f"{self.title}: already downloaded")
-                    return True
+        try:
+            if os.path.exists(self.path):
+                with open(self.path, "r") as f:
+                    data = json.load(f)
+                    if data["snapshot_id"] == self.snapshot_id:
+                        logging.info(f"{self.title}: already downloaded")
+                        return True
+        except Exception as e:
+            logging.error(e)
+            return False
+
         return False
 
     def is_up_to_date_for(self, username):
-        if os.path.exists(self.path):
-            with open(self.path, "r") as f:
-                data = json.load(f)
+        try:
+            if os.path.exists(self.path):
+                with open(self.path, "r") as f:
+                    data = json.load(f)
 
-                if data.get("users") is None:
-                    return False
-                else:
-                    self.users = data["users"]
+                    if data.get("users") is None:
+                        return False
+                    else:
+                        self.users = data["users"]
 
-                if self.users.get(username) is None:
-                    return False
+                    if self.users.get(username) is None:
+                        return False
 
-                if self.users.get(username) == self.snapshot_id:
-                    return True
+                    if self.users.get(username) == self.snapshot_id:
+                        return True
+        except Exception as e:
+            logging.error(e)
+            return False
+
         return False
 
     def __repr__(self):
