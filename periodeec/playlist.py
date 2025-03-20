@@ -22,12 +22,17 @@ class Playlist:
         self.path = os.path.join(os.path.abspath(path), f"{id}.json")
         try:
             if os.path.exists(self.path):
+                logging.info(
+                    f"Playlist {self.title} exists at path {self.path}")
                 with open(self.path, "r") as f:
                     data = json.load(f)
                     if data.get("tracks") is not None:
-                        self.tracks = data["tracks"]
+                        tracks = data["tracks"]
+                        self.tracks = [Track(**track) for track in tracks]
+
                     if data["snapshot_id"] == self.snapshot_id:
                         self.uptodate = True
+                        logging.info(f"Playlist {self.title} is up-to-date")
                     if data.get("users") is not None:
                         self.users = data["users"]
 
