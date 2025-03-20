@@ -7,7 +7,7 @@ logger.setLevel(logging.INFO)
 
 
 class Playlist:
-    def __init__(self, title: str, tracks: list[Track], id: str, path: str, description: str = "", snapshot_id: str = "", poster: str = "", summary: str = "", url: str = ""):
+    def __init__(self, title: str, tracks: list[Track], id: str, path: str, number_of_tracks=0, description: str = "", snapshot_id: str = "", poster: str = "", summary: str = "", url: str = ""):
         """
         Represents a Spotify/Plex playlist.
         """
@@ -19,6 +19,7 @@ class Playlist:
         self.poster = poster  # Playlist poster image URL
         self.summary = summary  # Playlist summary/description
         self.url = url  # Link to the original Spotify playlist
+        self.number_of_tracks = number_of_tracks
         self.id = id
         self.users = {}
         self.path = os.path.join(os.path.abspath(path), f"{id}.json")

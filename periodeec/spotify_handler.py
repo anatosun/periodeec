@@ -1,4 +1,6 @@
 import logging
+import random
+import time
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 from periodeec.playlist import Playlist
@@ -27,24 +29,52 @@ class SpotifyHandler:
         if not os.path.exists(self.path):
             os.makedirs(self.path)
 
-    def tracks(self, url: str) -> list:
+    def tracks(self, url: str,  number_of_tracks: int) -> list[Track]:
         """
-        Fetches all tracks from a Spotify playlist and returns a Playlist object.
+        Fetches all tracks from a Spotify playlist and returns a list of Track objects.
         """
-        playlist_id = url.split("/")[-1]
-        error_msg = f"Skipping playlist '{url}'"
         tracks = []
+        limit = 100
+        offset = 0
+        fields = "items(track(name,external_ids.isrc,album(name,artists(name))))"
+        error_msg = f"Skipping playlist '{url}'"
 
         try:
-            playlist_data = self.sp.playlist(playlist_id=playlist_id)
+            playlist_tracks = self.sp.playlist_items(
+                url, limit=limit, offset=offset, fields=fields)
+            if not playlist_tracks or not playlist_tracks.get("items"):
+                logging.error(f"{error_msg}: tracks not found")
+                return []
         except Exception as e:
-            logger.error(f"{error_msg}: {e}")
-            return tracks
+            logging.error(f"{error_msg}: {e}")
+            return []
 
-        if not playlist_data or not playlist_data.get("tracks") or not playlist_data["tracks"].get("items"):
-            return tracks
+        tracks.extend(self._extract_tracks(playlist_tracks["items"]))
+        offset = len(tracks)
 
-        for item in playlist_data["tracks"]["items"]:
+        while offset < number_of_tracks:
+            # Rate-limiting to avoid hitting API limits
+            time.sleep(random.uniform(3, 5))
+            error_offset_msg = f"Error getting '{url}' tracks at offset {offset}"
+            try:
+                playlist_tracks = self.sp.playlist_items(
+                    url, limit=limit, offset=offset, fields=fields)
+                if not playlist_tracks or not playlist_tracks.get("items"):
+                    logging.error(error_offset_msg)
+                    return tracks
+                tracks.extend(self._extract_tracks(playlist_tracks["items"]))
+                offset = len(tracks)
+            except Exception as e:
+                logging.error(f"{error_offset_msg}: {e}")
+                return tracks
+
+        return tracks
+
+    @staticmethod
+    def _extract_tracks(items: list) -> list[Track]:
+        """Helper method to parse track data."""
+        parsed_tracks = []
+        for item in items:
             track_info = item.get("track")
             if track_info and track_info.get("external_ids") and track_info["external_ids"].get("isrc"):
                 track = Track(
@@ -54,9 +84,8 @@ class SpotifyHandler:
                     artist=track_info["album"]["artists"][0]["name"],
                     path=""
                 )
-                tracks.append(track)
-
-        return tracks
+                parsed_tracks.append(track)
+        return parsed_tracks
 
     def playlists(self, username: str) -> list[Playlist]:
         """
@@ -83,6 +112,7 @@ class SpotifyHandler:
                     tracks=[],  # Tracks will be fetched later
                     id=playlist["id"],
                     path=self.path,
+                    number_of_tracks=playlist["tracks"]["total"],
                     description=playlist.get("description", ""),
                     snapshot_id=playlist.get("snapshot_id", ""),
                     poster=playlist["images"][0]["url"] if playlist.get(
