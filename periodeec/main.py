@@ -75,14 +75,15 @@ def sync_user(user: User, spotify_handler: SpotifyHandler, plex_handler: PlexHan
                                 success, path, err = downloader.enqueue(
                                     path=dl_path, isrc=track.isrc, fallback_album_query=f"{track.artist} {track.album}"
                                 )
+                                if err != "":
+                                    logging.error(err)
 
                                 if success:
                                     success, err = bt.add(dl_path, track.isrc)
                                     if success:
                                         exists, path = match(bt, track)
-
-                                if not success or not exists:
-                                    logger.error(err)
+                                    if err != "":
+                                        logging.error(err)
 
         for username in plex_users:
             if playlist.is_up_to_date_for(username):
