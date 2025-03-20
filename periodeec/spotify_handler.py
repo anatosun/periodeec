@@ -3,10 +3,11 @@ import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 from periodeec.playlist import Playlist
 from periodeec.track import Track
+import os
 
 
 class SpotifyHandler:
-    def __init__(self, client_id: str, client_secret: str, redirect_uri: str = "http://localhost:8080"):
+    def __init__(self, client_id: str, client_secret: str, path="./playlists"):
         """
         Initializes the Spotify handler with user authentication.
 
@@ -19,6 +20,9 @@ class SpotifyHandler:
             client_secret=client_secret,
         )
         self.sp = spotipy.Spotify(auth_manager=self.auth_manager)
+        self.path = os.path.abspath(path)
+        if not os.path.exists(self.path):
+            os.makedirs(self.path)
 
     def fetch_playlist_tracks(self, url: str) -> Playlist:
         """
@@ -31,7 +35,7 @@ class SpotifyHandler:
             playlist_data = self.sp.playlist(playlist_id=playlist_id)
         except Exception as e:
             logging.error(f"{error_msg}: {e}")
-            return Playlist(title="Unknown", tracks=[], url=url)
+            return Playlist(title="Unknown", tracks=[], url=url, id="0", path=self.path)
 
         if not playlist_data or not playlist_data.get("tracks") or not playlist_data["tracks"].get("items"):
             logging.error(f"{error_msg}: No tracks found")
@@ -39,7 +43,7 @@ class SpotifyHandler:
                 title = playlist_data["name"]
             else:
                 title = "None"
-            return Playlist(title=title, tracks=[], url=url)
+            return Playlist(title=title, tracks=[], url=url, id="0", path=self.path)
 
         tracks = []
         for item in playlist_data["tracks"]["items"]:
@@ -57,6 +61,8 @@ class SpotifyHandler:
         return Playlist(
             title=playlist_data["name"],
             tracks=tracks,
+            id=playlist_data["id"],
+            path=self.path,
             description=playlist_data.get("description", ""),
             snapshot_id=playlist_data.get("snapshot_id", ""),
             poster=playlist_data["images"][0]["url"] if playlist_data.get(
@@ -88,6 +94,8 @@ class SpotifyHandler:
                 playlist_obj = Playlist(
                     title=playlist["name"],
                     tracks=[],  # Tracks will be fetched later
+                    id=playlist["id"],
+                    path=self.path,
                     description=playlist.get("description", ""),
                     snapshot_id=playlist.get("snapshot_id", ""),
                     poster=playlist["images"][0]["url"] if playlist.get(

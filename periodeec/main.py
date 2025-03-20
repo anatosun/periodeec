@@ -50,6 +50,8 @@ def sync_user(user: User, spotify_handler: SpotifyHandler, plex_handler: PlexHan
     playlists = spotify_handler.fetch_playlists_from_user(spotify_username)
 
     for playlist in playlists:
+        if playlist.is_up_to_date():
+            continue
         spotify_handler.populate_playlist(playlist)
 
         for track in playlist.tracks:
@@ -76,6 +78,8 @@ def sync_user(user: User, spotify_handler: SpotifyHandler, plex_handler: PlexHan
 
         for username in plex_users:
             plex_handler.create(playlist, username, False)
+
+        playlist.save()
 
 
 def sync(spotify_handler, plex_handler, config, bt, downloaders, settings):

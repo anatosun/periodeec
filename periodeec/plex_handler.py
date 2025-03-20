@@ -23,10 +23,12 @@ class PlexHandler:
     def create_m3u(self, playlist: Playlist, username: str) -> str:
         """Creates an M3U file for the given playlist and returns the file path."""
 
+        invalid = '<>:"/\\|?* '
         title = playlist.title
 
-        re.sub(r'[^\w_. -/]', '_', username)
-        re.sub(r'[^\w_. -/]', '_', title)
+        for char in invalid:
+            title = title.replace(char, '_')
+            username = username.replace(char, '_')
 
         m3u_path = os.path.join(self.m3u_path, username)
         if not os.path.exists(m3u_path):
