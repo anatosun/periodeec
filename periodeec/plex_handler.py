@@ -85,7 +85,7 @@ class PlexHandler:
                 try:
                     res = plex_instance.playlist(title=playlist.title)
 
-                    if res:
+                    if res is not None:
                         pl = res
                         logging.info(
                             f"Updating existing Plex playlist '{playlist.title}' for '{username}'")
@@ -93,6 +93,7 @@ class PlexHandler:
                         pl.addItems(items=items)
                         pl.uploadPoster(url=playlist.poster)
                         pl.editSummary(summary=playlist.summary)
+
                     else:
                         logging.error(
                             f"Failed to fetch Plex playlist '{playlist.title}' for '{username}', result is '{res}'")
