@@ -35,7 +35,8 @@ logging.basicConfig(
 
 
 def match(bt: BeetsHandler, track: Track):
-    exists, path = bt.exists(track.isrc, fuzzy=False)
+    exists, path = bt.exists(track.isrc, fuzzy=False,
+                             artist=track.artist, title=track.title)
     if exists:
         return exists, path
 

@@ -71,7 +71,7 @@ class BeetsHandler():
             if search_id == "":
                 result_output = result_output.replace(
                     "\n", " ").replace("Skipping.", "")
-                return False, f"beets was unable to find a matching release {result_output}"
+                return False, f"beets was unable to find a matching release: {result_output}"
             else:
                 return self.add(path, "")
 

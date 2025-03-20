@@ -95,7 +95,7 @@ class PlexHandler:
                         pl.editSummary(summary=playlist.summary)
                     else:
                         logging.error(
-                            "Failed to fetch Plex playlist '{playlist.title}' for '{username}', result is '{res}'")
+                            f"Failed to fetch Plex playlist '{playlist.title}' for '{username}', result is '{res}'")
                 except Exception as e:
                     logging.info(
                         f"Creating new Plex playlist '{playlist.title}' for '{username}': {e}")
