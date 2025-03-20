@@ -50,7 +50,7 @@ def match(bt: BeetsHandler, track: Track):
 def sync_user(user: User, spotify_handler: SpotifyHandler, plex_handler: PlexHandler, bt: BeetsHandler, download_path: str, downloaders: dict):
     spotify_username = user.spotify_username
     plex_users = user.sync_to_plex_users
-    logger.info(f"Syncing user {spotify_username} to {plex_users}")
+    logger.info(f"Syncing user '{spotify_username}' to '{plex_users}'")
     playlists = spotify_handler.playlists(spotify_username)
 
     for playlist in playlists:
@@ -58,9 +58,9 @@ def sync_user(user: User, spotify_handler: SpotifyHandler, plex_handler: PlexHan
 
         if playlist.is_up_to_date():
             logger.info(
-                f"Playlist {playlist.title} is the most recent version")
+                f"Playlist '{playlist.title}' is the most recent version")
         else:
-            logger.info(f"Updating playlist {playlist.title}")
+            logger.info(f"Updating playlist '{playlist.title}'")
             tracks = spotify_handler.tracks(playlist.url)
             logger.info(f"Fetched {len(tracks)} tracks from Spotify")
             playlist.tracks = playlist.update_tracklist(
@@ -94,7 +94,7 @@ def sync_user(user: User, spotify_handler: SpotifyHandler, plex_handler: PlexHan
         for username in plex_users:
             if playlist.is_up_to_date_for(username):
                 logger.info(
-                    f"Playlist {playlist.title} is up-to-date for {username}.")
+                    f"Playlist '{playlist.title}' is up-to-date for '{username}'")
                 continue
             success = plex_handler.create(playlist, username, False)
             if success:

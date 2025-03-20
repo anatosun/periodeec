@@ -25,7 +25,7 @@ class Playlist:
         try:
             if os.path.exists(self.path):
                 logger.info(
-                    f"Playlist {self.title} exists at path {self.path}")
+                    f"Playlist '{self.title}' exists at path '{self.path}'")
                 with open(self.path, "r") as f:
                     data = json.load(f)
                     if data.get("tracks") is not None:
@@ -36,7 +36,7 @@ class Playlist:
 
                     if data["snapshot_id"] == self.snapshot_id:
                         self.uptodate = True
-                        logger.info(f"Playlist {self.title} is up-to-date")
+                        logger.info(f"Playlist '{self.title}' is up-to-date")
                     if data.get("users") is not None:
                         self.users = data["users"]
 
@@ -45,7 +45,7 @@ class Playlist:
 
     def save(self):
         logger.info(
-            f"Saving playlist {self.title} with snapshot {self.snapshot_id}")
+            f"Saving playlist '{self.title}' with snapshot '{self.snapshot_id}'")
         with open(self.path, "w") as f:
             json.dump(self.to_dict(), f)
 
@@ -59,11 +59,12 @@ class Playlist:
 
         if len(old_tracks) > 0:
             logger.info(
-                f"Updating tracklist for {self.title} (new: {len(tracks)}), old: {len(old_tracks)}")
+                f"Updating tracklist for '{self.title}' (new: {len(tracks)}), old: {len(old_tracks)}")
             for track in tracks:
                 for old in old_tracks:
                     if track.isrc == old.isrc:
-                        logger.debug(f"Found {track.title} at path {old.path}")
+                        logger.debug(
+                            f"Found '{track.title}' at path {old.path}")
                         track.path = old.path
                         old_tracks.remove(old)
                         break
