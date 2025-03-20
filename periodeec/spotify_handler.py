@@ -91,27 +91,57 @@ class SpotifyHandler:
         """
         Fetches all playlists from a Spotify user and returns a list of Playlist objects.
         """
-        logger.info(f"Fetching playlists for user {username}")
-        limit, total = 50, 0
+        logging.info(f"Fetching playlists for user {username}")
+        limit, offset = 50, 0
+        playlists = []
+        error_msg = f"Skipping user {username}"
 
         try:
-            playlists_data = self.sp.user_playlists(username, limit=limit)
+            playlists_data = self.sp.user_playlists(
+                username, limit=limit, offset=offset)
             if not playlists_data or not playlists_data.get("items"):
-                logger.error(f"Skipping user {username}: No playlists found")
+                logging.error(f"{error_msg}: No playlists found")
                 return []
-            total = playlists_data["total"]
+            total = playlists_data.get("total", len(playlists_data["items"]))
         except Exception as e:
-            logger.error(f"Skipping user {username}: {e}")
+            logging.error(f"{error_msg}: {e}")
             return []
 
-        playlists = []
-        for playlist in playlists_data["items"]:
+        playlists.extend(self._extract_playlists(playlists_data["items"]))
+        offset = len(playlists)
+
+        while offset < total:
+            # Rate-limiting to avoid API limits
+            time.sleep(random.uniform(3, 5))
+            error_offset_msg = f"Error fetching playlists for user {username} at offset {offset}"
+            try:
+                playlists_data = self.sp.user_playlists(
+                    username, limit=limit, offset=offset)
+                if not playlists_data or not playlists_data.get("items"):
+                    logging.error(error_offset_msg)
+                    return playlists
+                playlists.extend(self._extract_playlists(
+                    playlists_data["items"]))
+                offset = len(playlists)
+            except Exception as e:
+                logging.error(f"{error_offset_msg}: {e}")
+                return playlists
+
+        logging.info(
+            f"Fetched {len(playlists)}/{total} playlists for user {username}")
+        return playlists
+
+    @staticmethod
+    def _extract_playlists(items: list) -> list[Playlist]:
+        """Helper method to parse playlist data."""
+        parsed_playlists = []
+        for playlist in items:
             if playlist.get("external_urls") and playlist["external_urls"].get("spotify"):
                 playlist_obj = Playlist(
                     title=playlist["name"],
                     tracks=[],  # Tracks will be fetched later
                     id=playlist["id"],
-                    path=self.path,
+                    path="",  # Define path handling if needed
                     number_of_tracks=playlist["tracks"]["total"],
                     description=playlist.get("description", ""),
                     snapshot_id=playlist.get("snapshot_id", ""),
@@ -120,8 +150,5 @@ class SpotifyHandler:
                     summary=playlist.get("description", ""),
                     url=playlist["external_urls"]["spotify"]
                 )
-                playlists.append(playlist_obj)
-
-        logger.info(
-            f"Fetched {len(playlists)}/{total} playlists for user {username}")
-        return playlists
+                parsed_playlists.append(playlist_obj)
+        return parsed_playlists
