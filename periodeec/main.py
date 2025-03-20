@@ -28,7 +28,11 @@ class Environment:
 env = Environment(os.getenv("PD_CONFIG", "/config"),
                   bool(os.getenv("PD_RUN", False)))
 
-logging.basicConfig(level=logging.ERROR)
+logging.basicConfig(
+    format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S',
+    level=logging.INFO
+)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
