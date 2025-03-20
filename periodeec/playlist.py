@@ -18,10 +18,14 @@ class Playlist:
         self.url = url  # Link to the original Spotify playlist
         self.id = id
         self.path = os.path.join(os.path.abspath(path), f"{id}.json")
+        self.users = {}
 
     def save(self):
         with open(self.path, "w") as f:
             json.dump(self.to_dict(), f)
+
+    def update_for(self, username):
+        self.users[username] = self.snapshot_id
 
     def is_up_to_date(self):
         if os.path.exists(self.path):
@@ -29,6 +33,23 @@ class Playlist:
                 data = json.load(f)
                 if data["snapshot_id"] == self.snapshot_id:
                     logging.info(f"{self.title}: already downloaded")
+                    return True
+        return False
+
+    def is_up_to_date_for(self, username):
+        if os.path.exists(self.path):
+            with open(self.path, "r") as f:
+                data = json.load(f)
+
+                if data.get("users") is None:
+                    return False
+                else:
+                    self.users = data["users"]
+
+                if self.users.get(username) is None:
+                    return False
+
+                if self.users.get(username) == self.snapshot_id:
                     return True
         return False
 
@@ -46,7 +67,8 @@ class Playlist:
             "summary": self.summary,
             "url": self.url,
             "id": self.id,
-            "path": self.path
+            "path": self.path,
+            "users": self.users
         }
 
     def add_track(self, track: Track):

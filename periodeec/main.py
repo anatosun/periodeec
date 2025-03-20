@@ -76,10 +76,16 @@ def sync_user(user: User, spotify_handler: SpotifyHandler, plex_handler: PlexHan
                         if not success or not exists:
                             logging.error(err)
 
-        for username in plex_users:
-            plex_handler.create(playlist, username, False)
-
         playlist.save()
+
+        for username in plex_users:
+            if playlist.is_up_to_date_for(username):
+                logging.info(
+                    f"Playlist {playlist.title} is up-to-date for {username}.")
+                continue
+            plex_handler.create(playlist, username, False)
+            playlist.update_for(username)
+            playlist.save()
 
 
 def sync(spotify_handler, plex_handler, config, bt, downloaders, settings):
