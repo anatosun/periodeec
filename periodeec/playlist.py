@@ -31,7 +31,7 @@ class Playlist:
                     if data.get("tracks") is not None:
                         self.tracks = [Track(**track)
                                        for track in data["tracks"]]
-                        logging.info(
+                        logger.info(
                             f"Loaded {len(self.tracks)} tracks from cache")
 
                     if data["snapshot_id"] == self.snapshot_id:
