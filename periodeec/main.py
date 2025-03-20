@@ -84,6 +84,7 @@ def sync_user(user: User, spotify_handler: SpotifyHandler, plex_handler: PlexHan
                                         exists, path = match(bt, track)
                                     if err != "":
                                         logging.error(err)
+            playlist.save()
 
         for username in plex_users:
             if playlist.is_up_to_date_for(username):
