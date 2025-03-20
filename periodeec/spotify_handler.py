@@ -7,7 +7,7 @@ import os
 
 
 class SpotifyHandler:
-    def __init__(self, client_id: str, client_secret: str, path="./playlists"):
+    def __init__(self, client_id: str, client_secret: str, path="/config/.playlists"):
         """
         Initializes the Spotify handler with user authentication.
 

@@ -21,7 +21,7 @@ class Playlist:
 
     def save(self):
         with open(self.path, "w") as f:
-            json.dump(self, f)
+            json.dump(self.to_dict(), f)
 
     def is_up_to_date(self):
         if os.path.exists(self.path):
@@ -44,7 +44,9 @@ class Playlist:
             "snapshot_id": self.snapshot_id,
             "poster": self.poster,
             "summary": self.summary,
-            "url": self.url
+            "url": self.url,
+            "id": self.id,
+            "path": self.path
         }
 
     def add_track(self, track: Track):
