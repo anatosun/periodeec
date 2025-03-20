@@ -4,6 +4,7 @@ from plexapi.server import PlexServer
 from plexapi.collection import Collection as PlexCollection
 from plexapi.playlist import Playlist as PlexPlaylist
 from periodeec.playlist import Playlist
+import urllib.parse
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -22,7 +23,7 @@ class PlexHandler:
 
     def sanitize_filename(self, name: str) -> str:
         """Sanitize filenames by replacing invalid characters."""
-        return ''.join('_' if char in '<>:"/\\|?* ' else char for char in name)
+        return ''.join('_' if char in '<>:"/\\|?* &' else char for char in name)
 
     def create_m3u(self, playlist: Playlist, username: str) -> str:
         """Creates an M3U file for the given playlist and returns the file path."""
