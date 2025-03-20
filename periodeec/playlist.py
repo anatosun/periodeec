@@ -59,12 +59,12 @@ class Playlist:
 
         if len(old_tracks) > 0:
             logger.info(
-                f"Updating tracklist for '{self.title}' (new: {len(tracks)}), old: {len(old_tracks)}")
+                f"Updating tracklist for '{self.title}' (new: {len(tracks)}, old: {len(old_tracks)})")
             for track in tracks:
                 for old in old_tracks:
                     if track.isrc == old.isrc:
-                        logger.debug(
-                            f"Found '{track.title}' at path {old.path}")
+                        logger.info(
+                            f"Found '{track.title}' at path {old.path} from cache")
                         track.path = old.path
                         old_tracks.remove(old)
                         break
