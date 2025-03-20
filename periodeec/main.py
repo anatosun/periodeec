@@ -46,11 +46,12 @@ def match(bt: BeetsHandler, track: Track):
 def sync_user(user: User, spotify_handler: SpotifyHandler, plex_handler: PlexHandler, bt: BeetsHandler, download_path: str, downloaders: dict):
     spotify_username = user.spotify_username
     plex_users = user.sync_to_plex_users
+    logger.info(f"Syncing user {spotify_username} to {plex_users}")
     playlists = spotify_handler.playlists(spotify_username)
     upd = False
 
     for playlist in playlists:
-        logging.info(f"Syncing playlist {playlist.title}")
+        logger.info(f"Syncing playlist {playlist.title}")
 
         if playlist.is_up_to_date():
             logger.info(
@@ -77,14 +78,14 @@ def sync_user(user: User, spotify_handler: SpotifyHandler, plex_handler: PlexHan
                                     path=dl_path, isrc=track.isrc, fallback_album_query=f"{track.artist} {track.album}"
                                 )
                                 if err != "":
-                                    logging.error(err)
+                                    logger.error(err)
 
                                 if success:
                                     success, err = bt.add(dl_path, track.isrc)
                                     if success:
                                         exists, path = match(bt, track)
                                     if err != "":
-                                        logging.error(err)
+                                        logger.error(err)
             playlist.save()
 
         for username in plex_users:
@@ -101,7 +102,10 @@ def sync_user(user: User, spotify_handler: SpotifyHandler, plex_handler: PlexHan
 def sync(spotify_handler, plex_handler, config, bt, downloaders, settings):
     """Syncs Spotify playlists and users to Plex using the correct logic."""
     if config.usernames:
-        for user in config.usernames.values():
+        for username in config.usernames.keys():
+            user = config.usernames[username]
+            logger.info(
+                f"Syncing {username}'s playlist every {user.schedule} minutes")
             schedule.every(user.schedule).minutes.do(
                 sync_user, user, spotify_handler, plex_handler, bt, settings.downloads, downloaders)
 
@@ -132,13 +136,11 @@ def main():
             **settings.clients[client]) if settings.clients[client] else class_()
         logging.getLogger(client).setLevel(logging.WARNING)
 
-    for log_name, _ in logging.Logger.manager.loggerDict.items():
-        if log_name != 'periodeec':
-            logging.getLogger(log_name).setLevel(logging.WARNING)
-
     bt = BeetsHandler(settings.music)
 
+    logger.info("Initializing Spotify Handler")
     spotify_handler = SpotifyHandler(**config.settings.spotify)
+    logger.info("Initializing Plex Handler")
     plex_handler = PlexHandler(settings.plex["baseurl"], settings.plex["token"],
                                settings.plex["section"], m3u_path=os.path.join(settings.music, "m3u"))
 
