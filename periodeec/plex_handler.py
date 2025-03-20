@@ -101,6 +101,12 @@ class PlexHandler:
 
     def create(self, playlist: Playlist, username: str, collection: bool = False) -> bool:
         """Create or update a Plex playlist or collection."""
+
+        if len(playlist.tracks) < 1:
+            logger.error(
+                f"Failed to create playlist {playlist.title}, no tracks provided")
+            return False
+
         m3u_file = self.create_m3u(playlist, username)
 
         try:
