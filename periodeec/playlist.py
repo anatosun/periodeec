@@ -55,6 +55,7 @@ class Playlist:
             for old in old_tracks:
                 if track.isrc == old.isrc:
                     track.path = old.path
+                    old_tracks.remove(old)
                     break
 
         return tracks
