@@ -42,6 +42,8 @@ class Playlist:
             logger.error(e)
 
     def save(self):
+        logger.info(
+            f"Saving playlist {self.title} with snapshot {self.snapshot_id}")
         with open(self.path, "w") as f:
             json.dump(self.to_dict(), f)
 
