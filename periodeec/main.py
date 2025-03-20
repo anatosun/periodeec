@@ -63,6 +63,7 @@ def sync_user(user: User, spotify_handler: SpotifyHandler, plex_handler: PlexHan
             upd = True
 
         if not upd:
+            logger.info(f"Updating playlist {playlist.title}")
             tracks = spotify_handler.tracks(playlist.url)
             playlist.tracks = playlist.update_tracklist(
                 tracks, playlist.tracks)

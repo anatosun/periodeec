@@ -31,7 +31,8 @@ class Playlist:
                     if data.get("tracks") is not None:
                         self.tracks = [Track(**track)
                                        for track in data["tracks"]]
-                        logging.info(f"Loaded {len(self.tracks)} from cache")
+                        logging.info(
+                            f"Loaded {len(self.tracks)} tracks from cache")
 
                     if data["snapshot_id"] == self.snapshot_id:
                         self.uptodate = True
@@ -56,15 +57,16 @@ class Playlist:
 
     def update_tracklist(self, tracks, old_tracks):
 
-        logger.info(
-            f"Updating tracklist for {self.title} (new: {len(tracks)}), old: {len(old_tracks)}")
-        for track in tracks:
-            for old in old_tracks:
-                if track.isrc == old.isrc:
-                    logger.debug(f"Found {track.title} at path {old.path}")
-                    track.path = old.path
-                    old_tracks.remove(old)
-                    break
+        if len(old_tracks) > 0:
+            logger.info(
+                f"Updating tracklist for {self.title} (new: {len(tracks)}), old: {len(old_tracks)}")
+            for track in tracks:
+                for old in old_tracks:
+                    if track.isrc == old.isrc:
+                        logger.debug(f"Found {track.title} at path {old.path}")
+                        track.path = old.path
+                        old_tracks.remove(old)
+                        break
 
         return tracks
 
