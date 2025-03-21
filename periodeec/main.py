@@ -50,7 +50,11 @@ def match(bt: BeetsHandler, track: Track):
 def sync_user(user: User, spotify_handler: SpotifyHandler, plex_handler: PlexHandler, bt: BeetsHandler, download_path: str, downloaders: dict):
     spotify_username = user.spotify_username
     plex_users = user.sync_to_plex_users
-    logger.info(f"Syncing user '{spotify_username}' to '{plex_users}'")
+
+    spotify_user = spotify_handler.user(spotify_username)
+    friendly_name = spotify_user.name
+
+    logger.info(f"Syncing Spotify user '{friendly_name}' to '{plex_users}'")
     playlists = spotify_handler.playlists(spotify_username)
 
     for playlist in playlists:

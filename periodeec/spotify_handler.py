@@ -5,6 +5,7 @@ import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 from periodeec.playlist import Playlist
 from periodeec.track import Track
+from periodeec.user import User
 import os
 
 logger = logging.getLogger(__name__)
@@ -28,6 +29,20 @@ class SpotifyHandler:
         self.path = os.path.abspath(path)
         if not os.path.exists(self.path):
             os.makedirs(self.path)
+
+    def user(self, username) -> User:
+
+        user = self.sp.user(username)
+        if user is None:
+            logging.error(f"Error fetching data for user '{username}'")
+            return User(id=username)
+
+        return User(
+            id=username,
+            name=user.get("display_name"),
+            url=user["external_urls"].get("spotify"),
+            uri=user.get("uri")
+        )
 
     def tracks(self, url: str,  number_of_tracks: int) -> list[Track]:
         """
