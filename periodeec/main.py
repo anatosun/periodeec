@@ -1,6 +1,3 @@
-from plexapi.server import PlexServer
-from spotipy_anon import SpotifyAnon
-from spotipy import Spotify
 from periodeec.beets_handler import BeetsHandler
 from periodeec.plex_handler import PlexHandler
 from dataclasses import dataclass
@@ -12,7 +9,6 @@ import importlib
 import time
 import hashlib
 from periodeec.config import Config, Settings, User
-from periodeec.playlist import Playlist
 from periodeec.track import Track
 from periodeec.spotify_handler import SpotifyHandler
 import colorama
