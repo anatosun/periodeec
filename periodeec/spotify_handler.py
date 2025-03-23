@@ -27,7 +27,7 @@ class SpotifyHandler:
         )
         self.sp = spotipy.Spotify(auth_manager=self.auth_manager)
         self.path = os.path.abspath(path)
-        logging.info(f"Saving playlists at {self.path}")
+        logger.info(f"Saving playlists at {self.path}")
         if not os.path.exists(self.path):
             os.makedirs(self.path)
 

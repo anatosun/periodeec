@@ -83,14 +83,14 @@ def sync_user(user: User, spotify_handler: SpotifyHandler, plex_handler: PlexHan
                                         if exists:
                                             track.path = path
                                         else:
-                                            logging.error(
+                                            logger.error(
                                                 f"Could not retrieve freshly added track '{track.title}' by '{track.artist}'")
                                     else:
-                                        logging.error(
+                                        logger.error(
                                             f"Could not autotag track '{track.title}' by '{track.artist}'")
 
                                 else:
-                                    logging.error(
+                                    logger.error(
                                         f"Could not download track '{track.title}' by '{track.artist}': {err}")
             playlist.save()
 
