@@ -1,82 +1,219 @@
-import subprocess
 import os
 import logging
-
+from pathlib import Path
+from beets import library
+from beets.library import Library
+from beets.library import plugins
+from beets import config
+from beets.autotag import Recommendation
+from beets.importer import ImportSession, action
+from beets.ui import _load_plugins, get_path_formats
+from beets.util import syspath
+import sys
+from beets.dbcore.query import Query, SubstringQuery, AndQuery
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-class BeetsHandler():
+class BeetsHandler:
+    class AutoImportSession(ImportSession):
+        def __init__(self, lib: Library, path: str):
+            super().__init__(lib, None, [os.fsencode(path)], None)
+            logger.info(f"Importing {path}")
+            self.success = False
+            self.msg = ""
 
-    def __init__(self, library_path="/music"):
-        config_path = os.path.join(os.environ["HOME"], "beets")
-        if not os.path.exists(config_path):
-            os.makedirs(config_path)
+        def prettify(self, candidate):
+            artist = candidate.info.artist
+            album = candidate.info.album
+            year = candidate.info.year
+            return f"{artist} - {album} ({year})"
 
-        self.config_file_path = os.path.join(config_path, "config.yaml")
-        logger.debug(f"Beets library initialized at {library_path}")
+        def should_resume(self, path):
+            logger.warning(f"Beets not resuming import at '{path}'")
+            return False
 
-    def exists(self, isrc: str, fuzzy=False, artist="", title="") -> tuple[bool, str]:
-        """Checks if a track exists in the Beets library by ISRC or using a fuzzy search."""
-        logger.debug(
-            f"Checking existence of track: ISRC={isrc}, fuzzy={fuzzy}, artist={artist}, title={title}")
+        def choose_match(self, task):
+            if task.rec == Recommendation.strong:
+                match = task.candidates[0]
+                logger.info(f"Found strong match: {self.prettify(match)}")
+                self.success = True
+                self.msg = f"Beets found strong match among {len(task.candidates)} candidates"
+                return match
+            else:
+                logger.warning("No strong match for item, skipping.")
+                self.msg = f"Beets could not find strong match among {len(task.candidates)} candidates"
+                return action.SKIP
 
-        if fuzzy:
-            command = [
-                "beet", "list", f"artist:{artist}", f"title:{title}", "--format", "'$path'"]
+        def resolve_duplicate(self, task, found_duplicates):
+            logger.warning("Duplicate found, skipping.")
+            self.msg = f"Beets found duplicate items in library for path '{self.paths[0]}'"
+            return action.SKIP
+
+        def choose_item(self, task):
+            if task.rec == Recommendation.strong:
+                match = task.candidates[0]
+                logger.info(f"Found strong match: {self.prettify(match)}")
+                self.success = True
+                self.msg = f"Beets found strong match among {len(task.candidates)} candidates"
+                return match
+            else:
+                logger.warning("No strong match for item, skipping.")
+                self.msg = f"Beets could not find strong match among {len(task.candidates)} candidates"
+                return action.SKIP
+
+    def __init__(self, library: str, directory: str, baseurl: str, token: str, client_id: str, client_secret: str, port=32400, section='Music', beets_plugins=["spotify", "plexupdate"]):
+
+        config["directory"] = os.path.abspath(directory)
+        config["library"] = os.path.abspath(library)
+        config["plugins"] = beets_plugins
+        plugins.load_plugins(config["plugins"].as_str_seq())
+        loaded = [p.name for p in plugins.find_plugins()]
+        logger.info(f"Loaded Beets plugins: {loaded}")
+
+        config['import']['flat'] = True
+        config['import']['resume'] = False
+        config['import']['quiet'] = True
+        config['import']['timid'] = False
+        config['import']['duplicate_action'] = 'skip'
+        config["import"]["move"] = True
+
+        config["match"]["strong_rec_thresh"] = 0.15
+        config["match"]["medium_rec_thresh"] = 0.25
+        config["match"]["rec_gap_thresh"] = 0.25
+
+        config["match"]["max_rec"]["missing_tracks"] = "medium"
+        config["match"]["max_rec"]["unmatched_tracks"] = "medium"
+        config["match"]["max_rec"]["track_length"] = "medium"
+        config["match"]["max_rec"]["track_index"] = "medium"
+
+        config["match"]["distance_weights"] = {
+            "source": 0.0,
+            "artist": 1.0,
+            "album": 3.0,
+            "media": 1.0,
+            "mediums": 1.0,
+            "year": 1.0,
+            "country": 0.5,
+            "label": 0.5,
+            "catalognum": 0.5,
+            "albumdisambig": 0.5,
+            "album_id": 5.0,
+            "tracks": 2.0,
+            "missing_tracks": 0.9,
+            "unmatched_tracks": 0.6,
+            "track_title": 1.5,
+            "track_artist": 2.0,
+            "track_index": 0.0,
+            "track_length": 2.0,
+            "track_id": 5.0
+        }
+
+        config["match"]["preferred"]["countries"] = []
+        config["match"]["preferred"]["media"] = []
+        config["match"]["preferred"]["original_year"] = False
+
+        config["match"]["ignored"] = ["missing_tracks"]
+        config["match"]["required"] = []
+        config["match"]["ignored_media"] = []
+        config["match"]["ignore_data_tracks"] = True
+        config["match"]["ignore_video_tracks"] = True
+        config["match"]["track_length_grace"] = 10
+        config["match"]["track_length_max"] = 30
+
+        config["plex"]["host"] = baseurl
+        config["plex"]["port"] = port
+        config["plex"]["token"] = token
+        config["plex"]["library_name"] = section
+
+        config["chroma"]["auto"] = False
+        config["musicbrainz"]["enabled"] = False
+
+        config["spotify"]["tiebreak"] = "popularity"
+        config["spotify"]["source_weight"] = 0.9
+        config["spotify"]["show_failures"] = True
+        config["spotify"]["artist_field"] = "albumartist"
+        config["spotify"]["track_field"] = "title"
+        config["spotify"]["regex"] = []
+        config["spotify"]["client_id"] = client_id
+        config["spotify"]["client_secret"] = client_secret
+        config["spotify"]["tokenfile"] = "spotify_token.json"
+
+        self.lib = Library(path=library, directory=directory)
+
+        logger.info(
+            f"Beets initialized with library '{library}' and music directory '{directory}'")
+
+    def _query(self, beet_query) -> list[str]:
+
+        results = []
+        for item in self.lib.items(beet_query):
+            results.append(item.get("path"))
+        return results
+
+    def exists(self, isrc: str, fuzzy_fallback=True, artist: str = "", title: str = "") -> tuple[bool, str]:
+
+        query = SubstringQuery("isrc", isrc)
+
+        paths = self._query(query)
+
+        if paths:
+            path = os.fsdecode(paths[0])
+            logger.info(f"Found fuzzy match at '{path}'")
+            return True, path
+
+        if fuzzy_fallback:
+
+            query = AndQuery([
+                SubstringQuery("artist", artist),
+                SubstringQuery("title", title)
+            ])
+
         else:
-            command = ["beet", "list", f"isrc:{isrc}", "--format", "'$path'"]
-
-        result = subprocess.run(
-            command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
-        if result.returncode == 1:
-            logger.warning(
-                f"Beets command failed: {result.stderr.decode('utf-8')}")
+            logger.info(f"Could not match item with isrc '{isrc}'")
             return False, ""
 
-        output = result.stdout.decode("utf-8").strip()
-        if not output:
-            logger.debug("Track not found in Beets library.")
-            return False, ""
+        paths = self._query(query)
 
-        logger.debug(f"Track found: {output}")
-        return True, output.split("\n")[0][1:-1]
+        if paths:
+            path = os.fsdecode(paths[0])
+            logger.info(f"Found fuzzy match at '{path}'")
+            return True, path
+
+        logger.info(
+            f"Could not match item with isrc '{isrc}', artist '{artist}' and title '{title}'")
+        return False, ""
 
     def add(self, path: str, search_id="") -> tuple[bool, str]:
-        """Attempts to add a track to the Beets library."""
-        logger.debug(
-            f"Adding track to Beets: path={path}, search_id={search_id}")
+        """Use a custom non-interactive import session."""
 
-        if search_id == "":
-            command = ["beet", "import", "--quiet", path]
-        else:
-            command = ["beet", "import",
-                       f"--search-id={search_id}", "--quiet", path]
+        try:
+            if search_id != "":
+                logger.info(
+                    f"Attempting to autotag '{path}' with search_id '{search_id}'")
+                config["import"]["search_ids"] = [search_id]
 
-        result = subprocess.run(
-            command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        result_output = result.stdout.decode("utf-8")
+                session = self.AutoImportSession(
+                    lib=self.lib,
+                    path=path
+                )
+                session.run()
 
-        if "This album is already in the library!" in result_output:
-            logger.warning("Album already exists in Beets library.")
-            return False, "album already exists in beets library"
+                if session.success:
+                    return session.success, session.msg
 
-        if result.returncode == 1:
-            logger.error(f"Beets import failed: {result_output.strip()}")
-            if search_id == "":
-                return False, result_output.strip()
-            else:
-                return self.add(path, "")
+            logger.info(
+                f"Attempting to autotag '{path}' without search_id")
+            config["import"]["search_ids"] = []
 
-        if "Skipping." in result_output:
-            logger.warning("Beets was unable to find a matching release.")
-            if search_id == "":
-                result_output = result_output.replace(
-                    "\n", " ").replace("Skipping.", "")
-                return False, f"beets was unable to find a matching release: {result_output}"
-            else:
-                return self.add(path, "")
+            session = self.AutoImportSession(
+                lib=self.lib,
+                path=path
+            )
+            session.run()
 
-        logger.debug("Track successfully added to Beets library.")
-        return True, ""
+            return session.success, session.msg
+
+        except Exception as e:
+            logger.error("Beets import failed: %s", str(e))
+            return False, str(e)
