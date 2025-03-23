@@ -12,6 +12,7 @@ logger.setLevel(logging.ERROR)
 class Qobuz:
 
     def __init__(self, email, password):
+        self.name = "qobuz"
         self.qobuz = QobuzDL(quality=27, embed_art=True,
                              cover_og_quality=False)
         self.qobuz.get_tokens()
