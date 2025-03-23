@@ -49,10 +49,10 @@ class Plex:
 
 
 class Settings:
-    def __init__(self, config, music, downloads, unmatched, failed, spotify, clients, plex, playlists):
+    def __init__(self, config, beets, downloads, unmatched, failed, spotify, clients, plex, playlists):
         self.config = config
         self.downloads = downloads
-        self.music = music
+        self.beets = beets
         self.unmatched = unmatched
         self.failed = failed
         self.spotify = spotify
