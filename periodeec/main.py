@@ -33,16 +33,6 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-def match(bt: BeetsHandler, track: Track):
-    exists, path = bt.exists(track.isrc, fuzzy=False,
-                             artist=track.artist, title=track.title)
-    if exists:
-        return exists, path
-
-    return bt.exists(track.isrc, fuzzy=True,
-                     artist=track.artist, title=track.title)
-
-
 def sync_user(user: User, spotify_handler: SpotifyHandler, plex_handler: PlexHandler, bt: BeetsHandler, download_path: str, downloaders: dict):
     spotify_username = user.spotify_username
     plex_users = user.sync_to_plex_users
@@ -69,27 +59,39 @@ def sync_user(user: User, spotify_handler: SpotifyHandler, plex_handler: PlexHan
 
             for track in playlist.tracks:
                 if track.path is None or track.path == "":
-                    exists, path = match(bt, track)
+                    exists, path = bt.exists(
+                        isrc=track.isrc, fuzzy_fallback=True, artist=track.artist, title=track.title)
                     if exists:
                         track.path = path
                     else:
                         if download_path and downloaders:
                             for downloader in downloaders.values():
-                                hash = hashlib.sha256(
-                                    f"{track.artist}{track.album}{downloader}".encode()).hexdigest()[:]
-                                dl_path = os.path.join(download_path, hash)
+                                dl_path = os.path.join(
+                                    download_path, track.artist, track.album, downloader.name)
+                                if not os.path.exists(dl_path):
+                                    os.makedirs(dl_path)
                                 success, path, err = downloader.enqueue(
                                     path=dl_path, isrc=track.isrc, fallback_album_query=f"{track.artist} {track.album}"
                                 )
-                                if err != "":
-                                    logger.error(err)
 
                                 if success:
-                                    success, err = bt.add(dl_path, track.isrc)
+                                    success, err = bt.add(
+                                        dl_path, track.album_url)
                                     if success:
-                                        exists, path = match(bt, track)
-                                    if err != "":
-                                        logger.error(err)
+                                        exists, path = bt.exists(
+                                            isrc=track.isrc, fuzzy_fallback=True, artist=track.artist, title=track.title)
+                                        if exists:
+                                            track.path = path
+                                        else:
+                                            logging.error(
+                                                f"Could not retrieve freshly added track '{track.title}' by '{track.artist}'")
+                                    else:
+                                        logging.error(
+                                            f"Could not autotag track '{track.title}' by '{track.artist}'")
+
+                                else:
+                                    logging.error(
+                                        f"Could not download track '{track.title}' by '{track.artist}': {err}")
             playlist.save()
 
         for username in plex_users:
@@ -140,13 +142,14 @@ def main():
             **settings.clients[client]) if settings.clients[client] else class_()
         logging.getLogger(client).setLevel(logging.WARNING)
 
-    bt = BeetsHandler(settings.music)
+    bt = BeetsHandler(**settings.beets, **settings.plex, **settings.spotify)
 
     logger.info("Initializing Spotify Handler")
-    spotify_handler = SpotifyHandler(**config.settings.spotify)
+    spotify_handler = SpotifyHandler(
+        **config.settings.spotify, path=os.path.join(settings.beets["directory"], "playlists"))
     logger.info("Initializing Plex Handler")
-    plex_handler = PlexHandler(settings.plex["baseurl"], settings.plex["token"],
-                               settings.plex["section"], m3u_path=os.path.join(settings.music, "m3u"))
+    plex_handler = PlexHandler(
+        **settings.plex, m3u_path=os.path.join(settings.beets["directory"], "m3u"))
 
     sync(spotify_handler, plex_handler, config, bt, downloaders, settings)
 
