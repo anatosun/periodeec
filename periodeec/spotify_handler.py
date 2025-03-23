@@ -158,7 +158,7 @@ class SpotifyHandler:
                     tracks=[],  # Tracks will be fetched later
                     id=playlist["id"],
                     path=os.path.join(
-                        self.path, f"{str(playlist["id"])}.json"),
+                        self.path, f"{str(playlist['id'])}.json"),
                     number_of_tracks=playlist["tracks"]["total"],
                     description=playlist.get("description", ""),
                     snapshot_id=playlist.get("snapshot_id", ""),
