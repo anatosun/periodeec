@@ -22,7 +22,7 @@ class Playlist:
         self.number_of_tracks = number_of_tracks
         self.id = id
         self.users = {}
-        self.path = os.path.join(os.path.abspath(path), f"{id}.json")
+        self.path = os.path.join(os.path.abspath(path))
         try:
             if os.path.exists(self.path):
                 logger.info(
@@ -46,7 +46,7 @@ class Playlist:
 
     def save(self):
         logger.info(
-            f"Saving playlist '{self.title}' with snapshot '{self.snapshot_id}'")
+            f"Saving playlist '{self.title}' with snapshot '{self.snapshot_id}' at '{self.path}'")
         with open(self.path, "w") as f:
             json.dump(self.to_dict(), f)
 
@@ -85,15 +85,15 @@ class Playlist:
     def to_dict(self):
         """Convert playlist object to dictionary."""
         return {
-            "title": self.title,
+            "title": str(self.title),
             "tracks": [track.to_dict() for track in self.tracks],
-            "description": self.description,
-            "snapshot_id": self.snapshot_id,
-            "poster": self.poster,
-            "summary": self.summary,
-            "url": self.url,
-            "id": self.id,
-            "path": self.path,
+            "description": str(self.description),
+            "snapshot_id": str(self.snapshot_id),
+            "poster": str(self.poster),
+            "summary": str(self.summary),
+            "url": str(self.url),
+            "id": str(self.id),
+            "path": str(self.path),
             "users": self.users
         }
 
