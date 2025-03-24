@@ -7,7 +7,7 @@ import logging
 import schedule
 import importlib
 import time
-import hashlib
+from periodeec.modules.downloader import Downloader
 from periodeec.config import Config, Settings, User
 from periodeec.track import Track
 from periodeec.spotify_handler import SpotifyHandler
@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-def sync_user(user: User, spotify_handler: SpotifyHandler, plex_handler: PlexHandler, bt: BeetsHandler, download_path: str, downloaders: dict):
+def sync_user(user: User, spotify_handler: SpotifyHandler, plex_handler: PlexHandler, bt: BeetsHandler, download_path: str, downloaders: list[Downloader]):
     spotify_username = user.spotify_username
     plex_users = user.sync_to_plex_users
 
@@ -60,26 +60,26 @@ def sync_user(user: User, spotify_handler: SpotifyHandler, plex_handler: PlexHan
             for track in playlist.tracks:
                 if track.path is None or track.path == "":
                     exists, path = bt.exists(
-                        isrc=track.isrc, fuzzy_fallback=True, artist=track.artist, title=track.title)
+                        isrc=track.isrc, artist=track.artist, title=track.title)
                     if exists:
                         track.path = path
                     else:
                         if download_path and downloaders:
-                            for downloader in downloaders.values():
+                            for downloader in downloaders:
                                 dl_path = os.path.join(
                                     download_path, track.artist, track.album, downloader.name)
                                 if not os.path.exists(dl_path):
                                     os.makedirs(dl_path)
-                                success, path, err = downloader.enqueue(
-                                    path=dl_path, isrc=track.isrc, fallback_album_query=f"{track.artist} {track.album}"
+                                success, path = downloader.enqueue(
+                                    path=dl_path, isrc=track.isrc, artist=track.artist, title=track.title
                                 )
 
                                 if success:
-                                    success, err = bt.add(
+                                    success = bt.add(
                                         dl_path, track.album_url)
                                     if success:
                                         exists, path = bt.exists(
-                                            isrc=track.isrc, fuzzy_fallback=True, artist=track.artist, title=track.title)
+                                            isrc=track.isrc, artist=track.artist, title=track.title)
                                         if exists:
                                             track.path = path
                                         else:
@@ -91,7 +91,7 @@ def sync_user(user: User, spotify_handler: SpotifyHandler, plex_handler: PlexHan
 
                                 else:
                                     logger.error(
-                                        f"Could not download track '{track.title}' by '{track.artist}': {err}")
+                                        f"Could not download track '{track.title}' by '{track.artist}'")
             playlist.save()
 
         for username in plex_users:
@@ -132,15 +132,16 @@ def main():
                    for user, usr in data.get('usernames', {}).items()}
     )
 
-    downloaders = {}
+    downloaders = []
     for client in settings.clients:
         logger.info(f"Importing module {client}")
         module = f"periodeec.modules.{client}"
         logging.getLogger(client).setLevel(logging.WARNING)
         class_ = getattr(importlib.import_module(module), client.capitalize())
-        downloaders[client] = class_(
+        downloader = class_(
             **settings.clients[client]) if settings.clients[client] else class_()
-        logging.getLogger(client).setLevel(logging.WARNING)
+        downloaders.append(downloader)
+        logging.getLogger(client).setLevel(logging.ERROR)
 
     bt = BeetsHandler(**settings.beets, **settings.plex, **settings.spotify)
 

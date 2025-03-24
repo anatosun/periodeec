@@ -1,52 +1,64 @@
 import os
 import logging
 from qobuz_dl.core import QobuzDL
+from periodeec.modules.downloader import Downloader
 
-# Suppress logs from qobuz_dl
-logging.getLogger("qobuz_dl").setLevel(logging.CRITICAL)
-logging.getLogger("qobuz_dl").propagate = False
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.ERROR)
 
 
-class Qobuz:
+class Qobuz(Downloader):
 
-    def __init__(self, email, password):
-        self.name = "qobuz"
-        self.qobuz = QobuzDL(quality=27, embed_art=True,
-                             cover_og_quality=False)
+    def __init__(self,  email: str, password: str, quality=27, embed_art=True, cover_og_quality=False):
+        super().__init__("Qobuz")
+        if email == "" or password == "":
+            raise ValueError("Email and password cannot be empty.")
+
+        self.qobuz = QobuzDL(quality=quality, embed_art=embed_art,
+                             cover_og_quality=cover_og_quality)
         self.qobuz.get_tokens()
         self.qobuz.initialize_client(
-            str(email), str(password), self.qobuz.app_id, self.qobuz.secrets)
+            email, password, self.qobuz.app_id, self.qobuz.secrets)
 
-    def enqueue(self, path: str, isrc=None, link=None, fallback_album_query=None) -> tuple[bool, str, str]:
-
+    def match(self, isrc: str, artist: str, title: str) -> str:
+        query = isrc
         results = self.qobuz.search_by_type(
-            query=isrc, item_type="track", lucky=True)
-        track_mode = True
-
-        if results is None or len(results) == 0:
-            results = self.qobuz.search_by_type(
-                query=fallback_album_query, item_type="album", lucky=True)
-            track_mode = False
-
-        if results is None or len(results) == 0:
-            return False, "", f"could not find {isrc} on qobuz nor with fallback query {fallback_album_query}"
-
-        link = results[0]
-        if track_mode:
-            track_id = str(link).split("/")[-1]
+            query, item_type="track", lucky=True)
+        if results is not None and len(results) > 0:
+            track_id = str(results[0]).split("/")[-1]
             track = self.qobuz.client.get_track_meta(track_id)
-            link = track["album"]['url']
+            logging.info(
+                f"{self.name} successfully matched track with isrc '{isrc}'")
+            return track['album']['url']
 
-        id = str(link).split("/")[-1]
-        path = os.path.join(path, id+"_qobuz")
+        query = f"{artist} {title}"
+        results = self.qobuz.search_by_type(
+            query=query, item_type="album", lucky=True)
+
+        if results is not None and len(results) > 0:
+            logging.info(
+                f"{self.name} successfully matched track with artist '{artist}' and title '{title}'")
+            return results[0]
+
+        logging.error(f"{self.name} could not match track with isrc '{isrc}'")
+        return ""
+
+    def enqueue(self, path: str, isrc: str, artist: str, title: str) -> tuple[bool, str]:
+
+        link = self.match(isrc, artist, title)
+        if link == "":
+            return False, path
+
+        album_id = link.split("/")[-1]
+
         if not os.path.exists(path):
             os.makedirs(path)
 
         try:
-            self.qobuz.download_from_id(item_id=id, album=True, alt_path=path)
+            self.qobuz.download_from_id(
+                item_id=album_id, album=True, alt_path=path)
         except Exception as e:
-            return False, path, f"qobuz returned a non-zero exit code when processing {link} with isrc={isrc}"
+            logging.error(f"{self.name} returned a non-zero exit code: {e}")
+            return False, path
 
-        return True, path, ""
+        return True, path
