@@ -60,7 +60,7 @@ class BeetsHandler:
                 self.msg = f"Beets could not find strong match among {len(task.candidates)} candidates"
                 return action.SKIP
 
-    def __init__(self, library: str, directory: str, baseurl: str, token: str, client_id: str, client_secret: str, port=32400, section='Music', beets_plugins=["spotify", "plexupdate"]):
+    def __init__(self, library: str, directory: str, baseurl: str, token: str, client_id: str, client_secret: str, port=32400, section='Music', beets_plugins=["spotify", "plexupdate"], fuzzy=False):
 
         config["directory"] = os.path.abspath(directory)
         config["library"] = os.path.abspath(library)
@@ -138,6 +138,7 @@ class BeetsHandler:
         config["spotify"]["tokenfile"] = "spotify_token.json"
 
         self.lib = Library(path=library, directory=directory)
+        self.fuzzy = fuzzy
         self.cache = {}
 
         logger.info(
@@ -150,7 +151,7 @@ class BeetsHandler:
             results.append(item.get("path", with_album=False))
         return results
 
-    def exists(self, isrc: str, fuzzy_fallback=True, artist: str = "", title: str = "") -> tuple[bool, str]:
+    def exists(self, isrc: str, artist: str = "", title: str = "") -> tuple[bool, str]:
 
         if isrc != "" and self.cache.get(isrc) is not None:
             path = self.cache[isrc]
@@ -167,7 +168,7 @@ class BeetsHandler:
             self.cache['isrc'] = path
             return True, path
 
-        if fuzzy_fallback:
+        if self.fuzzy:
 
             query = AndQuery([
                 SubstringQuery("artist", artist),
@@ -191,7 +192,7 @@ class BeetsHandler:
             f"Could not match item with isrc '{isrc}', artist '{artist}' and title '{title}'")
         return False, ""
 
-    def add(self, path: str, search_id="") -> tuple[bool, str]:
+    def add(self, path: str, search_id="") -> bool:
         """Use a custom non-interactive import session."""
 
         try:
@@ -212,7 +213,10 @@ class BeetsHandler:
                         isrc = item.get("isrc", "", with_album=False)
                         if isrc != "":
                             self.cache[isrc] = path
-                    return session.success, session.msg
+                    return session.success
+
+            if not self.fuzzy:
+                return False
 
             logger.info(
                 f"Attempting to autotag '{path}' without search_id")
@@ -231,8 +235,8 @@ class BeetsHandler:
                     if isrc != "":
                         self.cache[isrc] = path
 
-            return session.success, session.msg
+            return session.success
 
         except Exception as e:
             logger.error("Beets import failed: %s", str(e))
-            return False, str(e)
+            return False
