@@ -1,16 +1,11 @@
 import os
 import logging
-from pathlib import Path
-from beets import library
 from beets.library import Library
 from beets.library import plugins
 from beets import config
 from beets.autotag import Recommendation
-from beets.importer import ImportSession, action
-from beets.ui import _load_plugins, get_path_formats
-from beets.util import syspath
-import sys
-from beets.dbcore.query import Query, SubstringQuery, AndQuery
+from beets.importer import ImportSession, action, ImportTask
+from beets.dbcore.query import SubstringQuery, AndQuery
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -33,30 +28,33 @@ class BeetsHandler:
             logger.warning(f"Beets not resuming import at '{path}'")
             return False
 
-        def choose_match(self, task):
+        def choose_match(self, task: ImportTask):
             if task.rec == Recommendation.strong:
-                match = task.candidates[0]
-                logger.info(f"Found strong match: {self.prettify(match)}")
+                self.match = task.candidates[0]
+                logger.info(f"Found strong match: {self.prettify(self.match)}")
                 self.success = True
+                self.task = task
                 self.msg = f"Beets found strong match among {len(task.candidates)} candidates"
-                return match
+                return self.match
             else:
                 logger.warning("No strong match for item, skipping.")
                 self.msg = f"Beets could not find strong match among {len(task.candidates)} candidates"
                 return action.SKIP
 
-        def resolve_duplicate(self, task, found_duplicates):
+        def resolve_duplicate(self, task: ImportTask, found_duplicates):
             logger.warning("Duplicate found, skipping.")
-            self.msg = f"Beets found duplicate items in library for path '{self.paths[0]}'"
+            self.match = task.candidates[0]
+            self.msg = f"Beets found {len(found_duplicates)} duplicate items in library for path '{self.paths[0]}'"
             return action.SKIP
 
         def choose_item(self, task):
             if task.rec == Recommendation.strong:
-                match = task.candidates[0]
-                logger.info(f"Found strong match: {self.prettify(match)}")
+                self.match = task.candidates[0]
+                logger.info(f"Found strong match: {self.prettify(self.match)}")
                 self.success = True
+                self.task = task
                 self.msg = f"Beets found strong match among {len(task.candidates)} candidates"
-                return match
+                return self.match
             else:
                 logger.warning("No strong match for item, skipping.")
                 self.msg = f"Beets could not find strong match among {len(task.candidates)} candidates"
@@ -140,6 +138,7 @@ class BeetsHandler:
         config["spotify"]["tokenfile"] = "spotify_token.json"
 
         self.lib = Library(path=library, directory=directory)
+        self.cache = {}
 
         logger.info(
             f"Beets initialized with library '{library}' and music directory '{directory}'")
@@ -148,10 +147,15 @@ class BeetsHandler:
 
         results = []
         for item in self.lib.items(beet_query):
-            results.append(item.get("path"))
+            results.append(item.get("path", with_album=False))
         return results
 
     def exists(self, isrc: str, fuzzy_fallback=True, artist: str = "", title: str = "") -> tuple[bool, str]:
+
+        if isrc != "" and self.cache.get(isrc) is not None:
+            path = self.cache[isrc]
+            logger.info(f"Found match from cache at '{path}'")
+            return True, path
 
         query = SubstringQuery("isrc", isrc)
 
@@ -159,7 +163,8 @@ class BeetsHandler:
 
         if paths:
             path = os.fsdecode(paths[0])
-            logger.info(f"Found fuzzy match at '{path}'")
+            logger.info(f"Found perfect match at '{path}'")
+            self.cache['isrc'] = path
             return True, path
 
         if fuzzy_fallback:
@@ -178,6 +183,8 @@ class BeetsHandler:
         if paths:
             path = os.fsdecode(paths[0])
             logger.info(f"Found fuzzy match at '{path}'")
+            if isrc != "":
+                self.cache['isrc'] = path
             return True, path
 
         logger.info(
@@ -200,6 +207,11 @@ class BeetsHandler:
                 session.run()
 
                 if session.success:
+                    for item in session.task.imported_items():
+                        path = os.fsdecode(item.destination())
+                        isrc = item.get("isrc", "", with_album=False)
+                        if isrc != "":
+                            self.cache[isrc] = path
                     return session.success, session.msg
 
             logger.info(
@@ -211,6 +223,13 @@ class BeetsHandler:
                 path=path
             )
             session.run()
+
+            if session.success:
+                for item in session.task.imported_items():
+                    path = os.fsdecode(item.destination())
+                    isrc = item.get("isrc", "", with_album=False)
+                    if isrc != "":
+                        self.cache[isrc] = path
 
             return session.success, session.msg
 
