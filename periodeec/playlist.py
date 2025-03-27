@@ -9,11 +9,10 @@ logger.setLevel(logging.INFO)
 class Playlist:
     def __init__(self, title: str, tracks: list[Track], id: str, path: str, number_of_tracks=0, description: str = "", snapshot_id: str = "", poster: str = "", summary: str = "", url: str = ""):
         """
-        Represents a Spotify/Plex playlist.
+        Represents a playlist.
         """
         self.title = title
         self.tracks = tracks  # List of Track objects
-        self.uptodate = False
         self.description = description
         self.snapshot_id = snapshot_id  # Unique identifier for updates
         self.poster = poster  # Playlist poster image URL
@@ -23,10 +22,11 @@ class Playlist:
         self.id = id
         self.users = {}
         self.path = os.path.join(os.path.abspath(path))
+
         try:
             if os.path.exists(self.path):
                 logger.info(
-                    f"Playlist '{self.title}' exists at path '{self.path}'")
+                    f"Playlist '{self.title}' exists at path '{self.path}': fetching information from cache")
                 with open(self.path, "r") as f:
                     data = json.load(f)
                     if data.get("tracks") is not None:
@@ -36,7 +36,6 @@ class Playlist:
                             f"Loaded {len(self.tracks)} tracks from cache")
 
                     if data["snapshot_id"] == self.snapshot_id:
-                        self.uptodate = True
                         logger.info(f"Playlist '{self.title}' is up-to-date")
                     if data.get("users") is not None:
                         self.users = data["users"]
@@ -54,7 +53,24 @@ class Playlist:
         self.users[username] = self.snapshot_id
 
     def is_up_to_date(self):
-        return self.uptodate
+
+        if not os.path.exists(self.path):
+            return False
+        try:
+            with open(self.path, "r") as f:
+                data = json.load(f)
+
+                if data.get("snapshot_id") is None:
+                    return False
+
+                if data["snapshot_id"] == self.snapshot_id:
+                    return True
+
+        except Exception as e:
+            logger.error(e)
+            return False
+
+        return False
 
     def update_tracklist(self, tracks, old_tracks):
 
