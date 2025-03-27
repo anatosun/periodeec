@@ -195,7 +195,11 @@ class BeetsHandler:
     def add(self, path: str, search_id="") -> bool:
         """Use a custom non-interactive import session."""
 
+        success = False
+        imported = []
+
         try:
+
             if search_id != "":
                 logger.info(
                     f"Attempting to autotag '{path}' with search_id '{search_id}'")
@@ -206,37 +210,38 @@ class BeetsHandler:
                     path=path
                 )
                 session.run()
+                success = session.success
+                imported = session.task.imported_items()
 
-                if session.success:
-                    for item in session.task.imported_items():
-                        path = os.fsdecode(item.destination())
-                        isrc = item.get("isrc", "", with_album=False)
-                        if isrc != "":
-                            self.cache[isrc] = path
-                    return session.success
+            if self.fuzzy and not success:
 
-            if not self.fuzzy:
-                return False
+                logger.info(
+                    f"Attempting to autotag '{path}' without search_id")
+                config["import"]["search_ids"] = []
 
-            logger.info(
-                f"Attempting to autotag '{path}' without search_id")
-            config["import"]["search_ids"] = []
-
-            session = self.AutoImportSession(
-                lib=self.lib,
-                path=path
-            )
-            session.run()
-
-            if session.success:
-                for item in session.task.imported_items():
-                    path = os.fsdecode(item.destination())
-                    isrc = item.get("isrc", "", with_album=False)
-                    if isrc != "":
-                        self.cache[isrc] = path
-
-            return session.success
+                session = self.AutoImportSession(
+                    lib=self.lib,
+                    path=path
+                )
+                session.run()
+                success = session.success
+                imported = session.task.imported_items()
 
         except Exception as e:
             logger.error("Beets import failed: %s", str(e))
             return False
+
+        if success:
+            try:
+                for item in imported:
+                    path = os.fsdecode(item.destination())
+                    isrc = item.get("isrc", "", with_album=False)
+                    title = item.get("title", "", with_album=False)
+                    logger.info(
+                        f"Beets imported track '{title}' at path '{path}'")
+                    if isrc != "":
+                        self.cache[isrc] = path
+            except Exception as e:
+                logger.error("Beets failed to cache paths after import")
+
+        return success
