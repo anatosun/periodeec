@@ -27,7 +27,7 @@ class Qobuz(Downloader):
         if results is not None and len(results) > 0:
             track_id = str(results[0]).split("/")[-1]
             track = self.qobuz.client.get_track_meta(track_id)
-            logging.info(
+            logger.info(
                 f"{self.name} successfully matched track with isrc '{isrc}'")
             return track['album']['url']
 
@@ -36,11 +36,11 @@ class Qobuz(Downloader):
             query=query, item_type="album", lucky=True)
 
         if results is not None and len(results) > 0:
-            logging.info(
+            logger.info(
                 f"{self.name} successfully matched track with artist '{artist}' and title '{title}'")
             return results[0]
 
-        logging.error(f"{self.name} could not match track with isrc '{isrc}'")
+        logger.error(f"{self.name} could not match track with isrc '{isrc}'")
         return ""
 
     def enqueue(self, path: str, isrc: str, artist: str, title: str) -> tuple[bool, str]:
@@ -58,7 +58,7 @@ class Qobuz(Downloader):
             self.qobuz.download_from_id(
                 item_id=album_id, album=True, alt_path=path)
         except Exception as e:
-            logging.error(f"{self.name} returned a non-zero exit code: {e}")
+            logger.error(f"{self.name} returned a non-zero exit code: {e}")
             return False, path
 
         return True, path
