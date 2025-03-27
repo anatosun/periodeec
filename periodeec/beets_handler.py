@@ -29,11 +29,11 @@ class BeetsHandler:
             return False
 
         def choose_match(self, task: ImportTask):
+            self.task = task
             if task.rec == Recommendation.strong:
                 self.match = task.candidates[0]
                 logger.info(f"Found strong match: {self.prettify(self.match)}")
                 self.success = True
-                self.task = task
                 self.msg = f"Beets found strong match among {len(task.candidates)} candidates"
                 return self.match
             else:
@@ -43,16 +43,17 @@ class BeetsHandler:
 
         def resolve_duplicate(self, task: ImportTask, found_duplicates):
             self.match = task.candidates[0]
+            self.task = task
             logger.error(
                 f"Beets found {len(found_duplicates)} duplicate items in library for path '{self.paths[0]}'")
             return action.SKIP
 
         def choose_item(self, task):
+            self.task = task
             if task.rec == Recommendation.strong:
                 self.match = task.candidates[0]
                 logger.info(f"Found strong match: {self.prettify(self.match)}")
                 self.success = True
-                self.task = task
                 self.msg = f"Beets found strong match among {len(task.candidates)} candidates"
                 return self.match
             else:
@@ -176,7 +177,8 @@ class BeetsHandler:
             ])
 
         else:
-            logger.info(f"Could not match item with isrc '{isrc}'")
+            logger.info(
+                f"Could not match track with isrc '{isrc}', artist '{artist}' and title '{title}'")
             return False, ""
 
         paths = self._query(query)
@@ -189,7 +191,7 @@ class BeetsHandler:
             return True, path
 
         logger.info(
-            f"Could not match item with isrc '{isrc}', artist '{artist}' and title '{title}'")
+            f"Could not match track with isrc '{isrc}', artist '{artist}' and title '{title}'")
         return False, ""
 
     def add(self, path: str, search_id="") -> bool:
