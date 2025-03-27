@@ -42,9 +42,9 @@ class BeetsHandler:
                 return action.SKIP
 
         def resolve_duplicate(self, task: ImportTask, found_duplicates):
-            logger.warning("Duplicate found, skipping.")
             self.match = task.candidates[0]
-            self.msg = f"Beets found {len(found_duplicates)} duplicate items in library for path '{self.paths[0]}'"
+            logger.error(
+                f"Beets found {len(found_duplicates)} duplicate items in library for path '{self.paths[0]}'")
             return action.SKIP
 
         def choose_item(self, task):
@@ -228,7 +228,7 @@ class BeetsHandler:
                 imported = session.task.imported_items()
 
         except Exception as e:
-            logger.error("Beets import failed: %s", str(e))
+            logger.error(f"Beets import failed: {e}")
             return False
 
         if success:
