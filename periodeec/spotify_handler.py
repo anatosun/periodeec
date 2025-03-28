@@ -53,7 +53,7 @@ class SpotifyHandler:
         tracks = []
         limit = 100
         offset = 0
-        fields = "items(track(name,external_ids.isrc,album(name,artists(name),release_date,external_urls(spotify))))"
+        fields = "items(track(name,external_ids.isrc,artists(name),album(name,release_date,external_urls(spotify))))"
         error_msg = f"Skipping playlist '{url}'"
 
         try:
@@ -117,8 +117,8 @@ class SpotifyHandler:
                     # fallback for release_date formats like "YYYY-MM" or "YYYY"
                     release_year = release_date_str.split("-")[0]
 
-            artists = album_info.get("artists") or []
-            artist_name = artists[0]["name"] if artists else ""
+            artists = track_info.get("artists") or []
+            artist_name = artists[0].get("name", "")
 
             title = track_info.get("name", "")
 
