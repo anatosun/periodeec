@@ -1,3 +1,4 @@
+from periodeec import download_manager
 from periodeec.beets_handler import BeetsHandler
 from periodeec.plex_handler import PlexHandler
 from dataclasses import dataclass
@@ -9,6 +10,7 @@ import importlib
 import time
 from periodeec.modules.downloader import Downloader
 from periodeec.config import Config, Settings, User
+from periodeec.download_manager import DownloadManager
 from periodeec.track import Track
 from periodeec.spotify_handler import SpotifyHandler
 import colorama
@@ -33,7 +35,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-def sync_user(user: User, spotify_handler: SpotifyHandler, plex_handler: PlexHandler, bt: BeetsHandler, download_path: str, downloaders: list[Downloader]):
+def sync_user(user: User, spotify_handler: SpotifyHandler, plex_handler: PlexHandler, bt: BeetsHandler, download_manager: DownloadManager):
     spotify_username = user.spotify_username
     plex_users = user.sync_to_plex_users
 
@@ -64,34 +66,27 @@ def sync_user(user: User, spotify_handler: SpotifyHandler, plex_handler: PlexHan
                     if exists:
                         track.path = path
                     else:
-                        if download_path and downloaders:
-                            for downloader in downloaders:
-                                dl_path = os.path.join(
-                                    download_path, track.artist, track.album, downloader.name)
-                                if not os.path.exists(dl_path):
-                                    os.makedirs(dl_path)
-                                success, path = downloader.enqueue(
-                                    path=dl_path, isrc=track.isrc, artist=track.artist, title=track.title
-                                )
+                        success, dl_path = download_manager.enqueue(
+                            track=track)
 
-                                if success:
-                                    success = bt.add(
-                                        dl_path, track.album_url)
-                                    if success:
-                                        exists, path = bt.exists(
-                                            isrc=track.isrc, artist=track.artist, title=track.title)
-                                        if exists:
-                                            track.path = path
-                                        else:
-                                            logger.error(
-                                                f"Could not retrieve freshly added track '{track.title}' by '{track.artist}'")
-                                    else:
-                                        logger.error(
-                                            f"Could not autotag track '{track.title}' by '{track.artist}'")
-
+                        if success:
+                            success = bt.add(
+                                dl_path, track.album_url)
+                            if success:
+                                exists, path = bt.exists(
+                                    isrc=track.isrc, artist=track.artist, title=track.title)
+                                if exists:
+                                    track.path = path
                                 else:
                                     logger.error(
-                                        f"Could not download track '{track.title}' by '{track.artist}'")
+                                        f"Could not retrieve freshly added track '{track.title}' by '{track.artist}'")
+                            else:
+                                logger.error(
+                                    f"Could not autotag track '{track.title}' by '{track.artist}'")
+
+                        else:
+                            logger.error(
+                                f"Could not download track '{track.title}' by '{track.artist}'")
             playlist.save()
 
         for username in plex_users:
@@ -105,7 +100,7 @@ def sync_user(user: User, spotify_handler: SpotifyHandler, plex_handler: PlexHan
                 playlist.save()
 
 
-def sync(spotify_handler, plex_handler, config, bt, downloaders, settings):
+def sync(spotify_handler, plex_handler, config, bt, download_manager):
     """Syncs Spotify playlists and users to Plex using the correct logic."""
     if config.usernames:
         for username in config.usernames.keys():
@@ -113,7 +108,7 @@ def sync(spotify_handler, plex_handler, config, bt, downloaders, settings):
             logger.info(
                 f"Syncing {username}'s playlist every {user.schedule} minutes")
             schedule.every(user.schedule).minutes.do(
-                sync_user, user, spotify_handler, plex_handler, bt, settings.downloads, downloaders)
+                sync_user, user, spotify_handler, plex_handler, bt, download_manager)
 
 
 def main():
@@ -152,7 +147,10 @@ def main():
     plex_handler = PlexHandler(
         **settings.plex, m3u_path=os.path.join(settings.beets["directory"], "m3u"))
 
-    sync(spotify_handler, plex_handler, config, bt, downloaders, settings)
+    download_manager = DownloadManager(
+        downloaders=downloaders, download_path=settings.downloads, failed_path=settings.failed)
+
+    sync(spotify_handler, plex_handler, config, bt, download_manager)
 
     if env.run:
         schedule.run_all()

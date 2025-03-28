@@ -1,5 +1,5 @@
 class Track:
-    def __init__(self, title: str, isrc: str, album: str, album_url: str, artist: str, path: str = ""):
+    def __init__(self, title: str, isrc: str, album: str, album_url: str, release_year: int, artist: str, path: str = ""):
         """
         Represents a track with relevant metadata.
         """
@@ -7,6 +7,7 @@ class Track:
         self.isrc = isrc
         self.album = album
         self.album_url = album_url
+        self.release_year = release_year
         self.artist = artist
         self.path = path  # Optional local path if available
 
@@ -20,6 +21,7 @@ class Track:
             "isrc": str(self.isrc),
             "album": str(self.album),
             "album_url": str(self.album_url),
+            "release_year": str(self.release_year),
             "artist": str(self.artist),
             "path": str(self.path)
         }

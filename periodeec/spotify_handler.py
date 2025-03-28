@@ -1,6 +1,7 @@
 import logging
 import random
 import time
+from datetime import datetime
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 from periodeec.playlist import Playlist
@@ -52,7 +53,7 @@ class SpotifyHandler:
         tracks = []
         limit = 100
         offset = 0
-        fields = "items(track(name,external_ids.isrc,album(name,artists(name),external_urls(spotify))))"
+        fields = "items(track(name,external_ids.isrc,album(name,artists(name),release_date,external_urls(spotify))))"
         error_msg = f"Skipping playlist '{url}'"
 
         try:
@@ -89,19 +90,49 @@ class SpotifyHandler:
     def extract_tracks(self, items: list) -> list[Track]:
         """Helper method to parse track data."""
         parsed_tracks = []
+
         for item in items:
             track_info = item.get("track")
-            if track_info and track_info.get("external_ids") and track_info["external_ids"].get("isrc"):
-                track = Track(
-                    title=track_info["name"],
-                    isrc=track_info["external_ids"]["isrc"],
-                    album=track_info["album"]["name"],
-                    album_url=track_info["album"]["external_urls"].get(
-                        "spotify"),
-                    artist=track_info["album"]["artists"][0]["name"],
-                    path=""
-                )
-                parsed_tracks.append(track)
+            if not track_info:
+                continue
+
+            external_ids = track_info.get("external_ids") or {}
+            isrc = external_ids.get("isrc")
+            if not isrc:
+                continue
+
+            album_info = track_info.get("album") or {}
+            album_name = album_info.get("name", "")
+            album_url = (album_info.get("external_urls")
+                         or {}).get("spotify", "")
+            release_date_str = album_info.get("release_date", "")
+            release_year = 1970
+
+            if release_date_str:
+                try:
+                    release_date = datetime.strptime(
+                        release_date_str, "%Y-%m-%d")
+                    release_year = release_date.year
+                except ValueError:
+                    # fallback for release_date formats like "YYYY-MM" or "YYYY"
+                    release_year = release_date_str.split("-")[0]
+
+            artists = album_info.get("artists") or []
+            artist_name = artists[0]["name"] if artists else ""
+
+            title = track_info.get("name", "")
+
+            track = Track(
+                title=title,
+                isrc=isrc,
+                album=album_name,
+                album_url=album_url,
+                release_year=release_year,
+                artist=artist_name,
+                path=""
+            )
+            parsed_tracks.append(track)
+
         return parsed_tracks
 
     def playlists(self, username: str) -> list[Playlist]:
@@ -151,21 +182,37 @@ class SpotifyHandler:
     def extract_playlists(self, items: list) -> list[Playlist]:
         """Helper method to parse playlist data."""
         parsed_playlists = []
+
         for playlist in items:
-            if playlist.get("external_urls") and playlist["external_urls"].get("spotify"):
-                playlist_obj = Playlist(
-                    title=playlist["name"],
-                    tracks=[],  # Tracks will be fetched later
-                    id=playlist["id"],
-                    path=os.path.join(
-                        self.path, f"{str(playlist['id'])}.json"),
-                    number_of_tracks=playlist["tracks"]["total"],
-                    description=playlist.get("description", ""),
-                    snapshot_id=playlist.get("snapshot_id", ""),
-                    poster=playlist["images"][0]["url"] if playlist.get(
-                        "images") else "",
-                    summary=playlist.get("description", ""),
-                    url=playlist["external_urls"]["spotify"]
-                )
-                parsed_playlists.append(playlist_obj)
+            external_urls = playlist.get("external_urls") or {}
+            url = external_urls.get("spotify")
+            if not url:
+                continue
+
+            playlist_id = playlist.get("id", "")
+            title = playlist.get("name", "")
+            description = playlist.get("description", "")
+            snapshot_id = playlist.get("snapshot_id", "")
+            images = playlist.get("images") or []
+            poster = images[0]["url"] if images else ""
+
+            tracks_info = playlist.get("tracks") or {}
+            number_of_tracks = tracks_info.get("total", 0)
+
+            path = os.path.join(self.path, f"{playlist_id}.json")
+
+            playlist_obj = Playlist(
+                title=title,
+                tracks=[],  # Tracks will be fetched later
+                id=playlist_id,
+                path=path,
+                number_of_tracks=number_of_tracks,
+                description=description,
+                snapshot_id=snapshot_id,
+                poster=poster,
+                summary=description,
+                url=url
+            )
+            parsed_playlists.append(playlist_obj)
+
         return parsed_playlists
