@@ -6,6 +6,7 @@ from beets import config
 from beets.autotag import Recommendation
 from beets.importer import ImportSession, action, ImportTask
 from beets.dbcore.query import SubstringQuery, AndQuery
+from beetsplug import plexupdate
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -141,6 +142,7 @@ class BeetsHandler:
         self.lib = Library(path=library, directory=directory)
         self.fuzzy = fuzzy
         self.cache = {}
+        self.plex = plexupdate.PlexUpdate()
 
         logger.info(
             f"Beets initialized with library '{library}' and music directory '{directory}'")
@@ -243,7 +245,10 @@ class BeetsHandler:
                         f"Beets imported track '{title}' at path '{path}'")
                     if isrc != "":
                         self.cache[isrc] = path
+
             except Exception as e:
                 logger.error("Beets failed to cache paths after import")
 
+        logger.info("Notifying Plex of newly imported tracks")
+        self.plex.update(self.lib)
         return success
