@@ -138,7 +138,13 @@ def main():
         downloaders.append(downloader)
         logging.getLogger(client).setLevel(logging.ERROR)
 
-    bt = BeetsHandler(**settings.beets, **settings.plex, **settings.spotify)
+    bt = BeetsHandler(**settings.beets,
+                      plex_baseurl=settings.plex['baseurl'],
+                      plex_token=settings.plex['token'],
+                      plex_section=settings.plex['section'],
+                      spotify_client_id=settings.spotify['client_id'],
+                      spotify_client_secret=settings.spotify['client_secret']
+                      )
 
     logger.info("Initializing Spotify Handler")
     spotify_handler = SpotifyHandler(

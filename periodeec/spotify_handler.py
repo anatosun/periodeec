@@ -14,18 +14,31 @@ logger.setLevel(logging.INFO)
 
 
 class SpotifyHandler:
-    def __init__(self, client_id: str, client_secret: str, path: str):
+    def __init__(self, path: str, client_id: str = "", client_secret: str = "", anonymous: bool = False):
         """
         Initializes the Spotify handler with user authentication.
 
         :param client_id: Spotify Client ID
         :param client_secret: Spotify Client Secret
-        :param redirect_uri: Redirect URI for Spotify authentication (default: http://localhost:8080)
+        :param path: Path where to store playlists
         """
-        self.auth_manager = SpotifyClientCredentials(
-            client_id=client_id,
-            client_secret=client_secret,
-        )
+        if anonymous:
+            try:
+                from spotipy_anon import SpotifyAnon
+            except Exception as e:
+                logger.error(
+                    f"Failed to load SpotifyAnon, this module must be installed to run Spotify in anonymous mode!")
+                exit(1)
+            self.auth_manager = SpotifyAnon()
+            logger.info("Spotify is running in anonymous mode")
+        else:
+            if client_id == "" or client_secret == "":
+                raise ValueError(
+                    "Valid Spotify Client ID and Secret must be provided unless in anonymous mode")
+            self.auth_manager = SpotifyClientCredentials(
+                client_id=client_id,
+                client_secret=client_secret,
+            )
         self.sp = spotipy.Spotify(auth_manager=self.auth_manager)
         self.path = os.path.abspath(path)
         logger.info(f"Saving playlists at {self.path}")

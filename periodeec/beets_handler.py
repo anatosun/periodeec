@@ -64,7 +64,7 @@ class BeetsHandler:
                 self.msg = f"Beets could not find strong match among {len(task.candidates)} candidates"
                 return action.SKIP
 
-    def __init__(self, library: str, directory: str, baseurl: str, token: str, client_id: str, client_secret: str,  section='Music', beets_plugins=["spotify", "plexupdate"], fuzzy=False):
+    def __init__(self, library: str, directory: str, plex_baseurl: str, plex_token: str, spotify_client_id: str, spotify_client_secret: str,  plex_section='Music', beets_plugins=["spotify", "plexupdate"], fuzzy=False):
 
         config["directory"] = os.path.abspath(directory)
         config["library"] = os.path.abspath(library)
@@ -123,14 +123,14 @@ class BeetsHandler:
         config["match"]["track_length_grace"] = 10
         config["match"]["track_length_max"] = 30
 
-        parsed_url = urlparse(baseurl)
+        parsed_url = urlparse(plex_baseurl)
         plex_host = parsed_url.hostname
         if parsed_url.port:
             plex_port = parsed_url.port
         else:
-            if "https" in baseurl:
+            if "https" in plex_baseurl:
                 plex_port = 443
-            elif "http" in baseurl:
+            elif "http" in plex_baseurl:
                 plex_port = 80
             else:
                 plex_port = 32400
@@ -141,10 +141,10 @@ class BeetsHandler:
         self.plex = plexupdate.PlexUpdate()
         config["plex"]["host"] = plex_host
         config["plex"]["port"] = plex_port
-        config["plex"]["token"] = token
-        config["plex"]["library_name"] = section
+        config["plex"]["token"] = plex_token
+        config["plex"]["library_name"] = plex_section
         config["plex"]["ignore_cert_errors"] = False
-        config["plex"]["secure"] = "https" in baseurl
+        config["plex"]["secure"] = "https" in plex_baseurl
 
         config["chroma"]["auto"] = False
         config["musicbrainz"]["enabled"] = False
@@ -155,8 +155,8 @@ class BeetsHandler:
         config["spotify"]["artist_field"] = "albumartist"
         config["spotify"]["track_field"] = "title"
         config["spotify"]["regex"] = []
-        config["spotify"]["client_id"] = client_id
-        config["spotify"]["client_secret"] = client_secret
+        config["spotify"]["client_id"] = spotify_client_id
+        config["spotify"]["client_secret"] = spotify_client_secret
         config["spotify"]["tokenfile"] = "spotify_token.json"
 
         self.lib = Library(path=library, directory=directory)
