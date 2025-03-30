@@ -1,8 +1,10 @@
 from periodeec import download_manager
+import argparse
 from periodeec.beets_handler import BeetsHandler
 from periodeec.plex_handler import PlexHandler
 from dataclasses import dataclass
 import os
+import sys
 import yaml
 import logging
 import schedule
@@ -13,26 +15,56 @@ from periodeec.config import Config, Settings, User
 from periodeec.download_manager import DownloadManager
 from periodeec.track import Track
 from periodeec.spotify_handler import SpotifyHandler
-import colorama
-colorama.init(strip=True, convert=False)
 
 
-@dataclass
-class Environment:
-    config: str
-    run: bool
 
+COLOR_RESET = "\033[0m"
+COLOR_RED = "\033[31m"
+COLOR_GREEN = "\033[32m"
+COLOR_YELLOW = "\033[33m"
 
-env = Environment(os.getenv("PD_CONFIG", "/config"),
-                  bool(os.getenv("PD_RUN", False)))
+class ColorFormatter(logging.Formatter):
+    COLORS = {
+        'INFO': COLOR_GREEN,
+        'WARNING': COLOR_YELLOW,
+        'ERROR': COLOR_RED,
+        'CRITICAL': COLOR_RED,
+    }
 
-logging.basicConfig(
-    format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S',
-    level=logging.INFO
+    def format(self, record):
+        color = self.COLORS.get(record.levelname, "")
+        message = super().format(record)
+        return f"{color}{message}{COLOR_RESET}"
+
+formatter = ColorFormatter(
+    fmt='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
 )
+handler = logging.StreamHandler(sys.stdout)
+handler.setFormatter(formatter)
+
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.INFO)
+
+# Remove any existing handlers before adding our own
+root_logger.handlers.clear()
+root_logger.addHandler(handler)
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Sync Spotify playlists to Plex")
+    parser.add_argument('--config', type=str, help='Path to config directory')
+    parser.add_argument('--run', action='store_true', help='Run in schedule loop')
+    return parser.parse_args()
+
+def get_config_path(cli_value: str | None) -> str:
+    return cli_value or os.getenv("PD_CONFIG", "/config")
+
+def should_run(cli_flag: bool) -> bool:
+    env_val = os.getenv("PD_RUN", "").lower()
+    return cli_flag or env_val == "true"
 
 
 def sync_user(user: User, spotify_handler: SpotifyHandler, plex_handler: PlexHandler, bt: BeetsHandler, download_manager: DownloadManager):
@@ -112,12 +144,16 @@ def sync(spotify_handler, plex_handler, config, bt, download_manager):
 
 
 def main():
-    with open(os.path.join(env.config, "config.yaml"), 'r') as stream:
+    args = parse_args()
+    config_path = get_config_path(args.config)
+    run_flag = should_run(args.run)
+
+    with open(os.path.join(config_path, "config.yaml"), 'r') as stream:
         data = yaml.safe_load(stream)
 
     settings_data = data.get('settings')
     if not settings_data:
-        logger.error(f"Settings not found in {env.config}/config.yaml")
+        logger.error(f"Settings not found in {config_path}/config.yaml")
         return
 
     settings = Settings(**settings_data)
@@ -158,10 +194,10 @@ def main():
 
     sync(spotify_handler, plex_handler, config, bt, download_manager)
 
-    if env.run:
+    if run_flag:
         schedule.run_all()
 
-    while True:
+    while run_flag:
         schedule.run_pending()
         time.sleep(1)
 

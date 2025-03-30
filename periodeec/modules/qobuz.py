@@ -3,6 +3,7 @@ import logging
 from qobuz_dl.core import QobuzDL
 from periodeec.modules.downloader import Downloader
 
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.ERROR)
 
