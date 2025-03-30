@@ -1,11 +1,24 @@
 import os
 import logging
+import sys
 from qobuz_dl.core import QobuzDL
 from periodeec.modules.downloader import Downloader
-
+import contextlib
+@contextlib.contextmanager
+def suppress_stdout_stderr():
+    with open(os.devnull, 'w') as devnull:
+        old_stdout = sys.stdout
+        old_stderr = sys.stderr
+        sys.stdout = devnull
+        sys.stderr = devnull
+        try:
+            yield
+        finally:
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.ERROR)
+logger.setLevel(logging.INFO)
 
 
 class Qobuz(Downloader):
@@ -63,8 +76,10 @@ class Qobuz(Downloader):
             os.makedirs(path)
 
         try:
-            self.qobuz.download_from_id(
-                item_id=album_id, album=True, alt_path=path)
+            with suppress_stdout_stderr():  # 👈 suppress tqdm here
+                self.qobuz.download_from_id(
+                    item_id=album_id, album=True, alt_path=path
+                )
         except Exception as e:
             logger.error(f"{self.name} returned a non-zero exit code: {e}")
             return False, path

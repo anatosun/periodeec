@@ -174,6 +174,13 @@ def main():
         downloaders.append(downloader)
         logging.getLogger(client).setLevel(logging.ERROR)
 
+        for name in logging.root.manager.loggerDict:
+            if name.startswith(client):
+                qlogger = logging.getLogger(name)
+                qlogger.setLevel(logging.CRITICAL + 1)
+                qlogger.propagate = False
+                qlogger.handlers.clear()
+
     bt = BeetsHandler(**settings.beets,
                       plex_baseurl=settings.plex['baseurl'],
                       plex_token=settings.plex['token'],
