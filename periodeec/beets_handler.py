@@ -1,4 +1,6 @@
 import os
+from urllib import parse
+from urllib.parse import urlparse
 import logging
 from beets.library import Library
 from beets.library import plugins
@@ -62,7 +64,7 @@ class BeetsHandler:
                 self.msg = f"Beets could not find strong match among {len(task.candidates)} candidates"
                 return action.SKIP
 
-    def __init__(self, library: str, directory: str, baseurl: str, token: str, client_id: str, client_secret: str, port=32400, section='Music', beets_plugins=["spotify", "plexupdate"], fuzzy=False):
+    def __init__(self, library: str, directory: str, baseurl: str, token: str, client_id: str, client_secret: str,  section='Music', beets_plugins=["spotify", "plexupdate"], fuzzy=False):
 
         config["directory"] = os.path.abspath(directory)
         config["library"] = os.path.abspath(library)
@@ -121,10 +123,28 @@ class BeetsHandler:
         config["match"]["track_length_grace"] = 10
         config["match"]["track_length_max"] = 30
 
-        config["plex"]["host"] = baseurl
-        config["plex"]["port"] = port
+        parsed_url = urlparse(baseurl)
+        plex_host = parsed_url.hostname
+        if parsed_url.port:
+            plex_port = parsed_url.port
+        else:
+            if "https" in baseurl:
+                plex_port = 443
+            elif "http" in baseurl:
+                plex_port = 80
+            else:
+                plex_port = 32400
+
+        logger.info(
+            f"Plex plugin initialized with host '{plex_host} and port '{plex_port}'")
+
+        self.plex = plexupdate.PlexUpdate()
+        config["plex"]["host"] = plex_host
+        config["plex"]["port"] = plex_port
         config["plex"]["token"] = token
         config["plex"]["library_name"] = section
+        config["plex"]["ignore_cert_errors"] = False
+        config["plex"]["secure"] = "https" in baseurl
 
         config["chroma"]["auto"] = False
         config["musicbrainz"]["enabled"] = False
@@ -142,7 +162,6 @@ class BeetsHandler:
         self.lib = Library(path=library, directory=directory)
         self.fuzzy = fuzzy
         self.cache = {}
-        self.plex = plexupdate.PlexUpdate()
 
         logger.info(
             f"Beets initialized with library '{library}' and music directory '{directory}'")
@@ -249,6 +268,7 @@ class BeetsHandler:
             except Exception as e:
                 logger.error("Beets failed to cache paths after import")
 
-        logger.info("Notifying Plex of newly imported tracks")
+        logger.info(
+            f"Notifying Plex of newly imported tracks at '{config['plex']['host']}'")
         self.plex.update(self.lib)
         return success
