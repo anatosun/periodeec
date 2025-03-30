@@ -27,14 +27,21 @@ class Qobuz(Downloader):
             query, item_type="track", lucky=True)
         if results is not None and len(results) > 0:
             track_id = str(results[0]).split("/")[-1]
-            track = self.qobuz.client.get_track_meta(track_id)
-            logger.info(
-                f"{self.name} successfully matched track with isrc '{isrc}'")
-            return track['album']['url']
+            try:
+                track = self.qobuz.client.get_track_meta(track_id)
+                logger.info(
+                    f"{self.name} successfully matched track with isrc '{isrc}'")
+                return track['album']['url']
+            except Exception as e:
+                logger.error("{self.name} ran into an error: {e}")
 
         query = f"{artist} {title}"
-        results = self.qobuz.search_by_type(
-            query=query, item_type="album", lucky=True)
+        try:
+            results = self.qobuz.search_by_type(
+                query=query, item_type="album", lucky=True)
+        except Exception as e:
+            logger.error("{self.name} ran into an error: {e}")
+            results = []
 
         if results is not None and len(results) > 0:
             logger.info(
