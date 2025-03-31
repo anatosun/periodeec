@@ -84,7 +84,9 @@ class SpotifyHandler:
 
         while offset < number_of_tracks:
             # Rate-limiting to avoid hitting API limits
-            time.sleep(random.uniform(3, 5))
+            timeout = random.uniform(5, 10)
+            time.sleep(timeout)
+            logger.info(f"Sleeping for {timeout} to prevent rate limiting")
             error_offset_msg = f"Error getting '{url}' tracks at offset {offset}"
             try:
                 playlist_tracks = self.sp.playlist_items(
@@ -173,7 +175,9 @@ class SpotifyHandler:
 
         while offset < total:
             # Rate-limiting to avoid API limits
-            time.sleep(random.uniform(3, 5))
+            timeout = random.uniform(5, 10)
+            time.sleep(timeout)
+            logger.info(f"Sleeping for {timeout} to prevent rate limiting")
             error_offset_msg = f"Error fetching playlists for user {username} at offset {offset}"
             try:
                 playlists_data = self.sp.user_playlists(
