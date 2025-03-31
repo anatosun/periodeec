@@ -285,7 +285,7 @@ class BeetsHandler:
             except Exception as e:
                 logger.error("Beets failed to cache paths after import")
 
-        if config["plex"]["token"] != "":
+        if success and config["plex"]["token"] != "":
             logger.info(
                 f"Notifying Plex of newly imported tracks at '{config['plex']['host']}'")
             self.plex.update(self.lib)
