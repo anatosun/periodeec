@@ -4,6 +4,8 @@ import sys
 from qobuz_dl.core import QobuzDL
 from periodeec.modules.downloader import Downloader
 import contextlib
+
+
 @contextlib.contextmanager
 def suppress_stdout_stderr():
     with open(os.devnull, 'w') as devnull:
@@ -16,6 +18,7 @@ def suppress_stdout_stderr():
         finally:
             sys.stdout = old_stdout
             sys.stderr = old_stderr
+
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -76,8 +79,9 @@ class Qobuz(Downloader):
             os.makedirs(path)
 
         try:
-            with suppress_stdout_stderr():  
-                logger.info("{self.name} downloading album with id {album_id}")
+            with suppress_stdout_stderr():
+                logger.info(
+                    f"{self.name} downloading album with id {album_id}")
                 self.qobuz.download_from_id(
                     item_id=album_id, album=True, alt_path=path
                 )
