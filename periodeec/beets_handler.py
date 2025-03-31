@@ -141,6 +141,13 @@ class BeetsHandler:
             f"Plex plugin initialized with host '{plex_host} and port '{plex_port}'")
 
         self.plex = plexupdate.PlexUpdate()
+        for name in logging.root.manager.loggerDict:
+            if name.startswith("beetsplug.plexupdate"):
+                qlogger = logging.getLogger(name)
+                qlogger.setLevel(logging.CRITICAL + 1)
+                qlogger.propagate = False
+                qlogger.handlers.clear()
+
         config["plex"]["host"] = plex_host
         config["plex"]["port"] = plex_port
         config["plex"]["token"] = plex_token
