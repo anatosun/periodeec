@@ -76,7 +76,8 @@ class Qobuz(Downloader):
             os.makedirs(path)
 
         try:
-            with suppress_stdout_stderr():  # 👈 suppress tqdm here
+            with suppress_stdout_stderr():  
+                logger.info("{self.name} downloading album with id {album_id}")
                 self.qobuz.download_from_id(
                     item_id=album_id, album=True, alt_path=path
                 )
