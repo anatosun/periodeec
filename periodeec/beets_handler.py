@@ -241,6 +241,7 @@ class BeetsHandler:
                 imported = session.task.imported_items()
             except Exception as e:
                 logger.error(f"Beets import failed: {e}")
+                success = False
 
         if self.fuzzy and not success:
 
@@ -261,6 +262,7 @@ class BeetsHandler:
                 imported = session.task.imported_items()
             except Exception as e:
                 logger.error(f"Beets import failed: {e}")
+                success = False
 
         if success:
             try:
