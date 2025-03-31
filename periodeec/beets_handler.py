@@ -224,9 +224,9 @@ class BeetsHandler:
         imported = []
 
         if search_id != "":
-            timeout = random.uniform(1, 3)
+            timeout = int(random.uniform(1, 3))
             time.sleep(timeout)
-            logger.info(f"Sleeping for {timeout} to avoid API rate limiting")
+            logger.info(f"Sleeping for {timeout}s to prevent rate limiting")
             try:
                 logger.info(
                     f"Attempting to autotag '{path}' with search_id '{search_id}'")
@@ -245,9 +245,9 @@ class BeetsHandler:
 
         if self.fuzzy and not success:
 
-            timeout = random.uniform(1, 3)
+            timeout = int(random.uniform(1, 3))
             time.sleep(timeout)
-            logger.info(f"Sleeping for {timeout} to avoid API rate limiting")
+            logger.info(f"Sleeping for {timeout}s to prevent rate limiting")
             try:
                 logger.info(
                     f"Attempting to autotag '{path}' without search_id")
