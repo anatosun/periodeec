@@ -28,7 +28,7 @@ class BeetsHandler:
             return f"{artist} - {album} ({year})"
 
         def should_resume(self, path):
-            logger.warning(f"Beets not resuming import at '{path}'")
+            logger.error(f"Beets not resuming import at '{path}'")
             return False
 
         def choose_match(self, task: ImportTask):
@@ -40,7 +40,7 @@ class BeetsHandler:
                 self.msg = f"Beets found strong match among {len(task.candidates)} candidates"
                 return self.match
             else:
-                logger.warning("No strong match for item, skipping.")
+                logger.error("No strong match for item, skipping.")
                 self.msg = f"Beets could not find strong match among {len(task.candidates)} candidates"
                 return action.SKIP
 
@@ -60,7 +60,7 @@ class BeetsHandler:
                 self.msg = f"Beets found strong match among {len(task.candidates)} candidates"
                 return self.match
             else:
-                logger.warning("No strong match for item, skipping.")
+                logger.error("No strong match for item, skipping.")
                 self.msg = f"Beets could not find strong match among {len(task.candidates)} candidates"
                 return action.SKIP
 
