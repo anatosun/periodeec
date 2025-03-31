@@ -81,7 +81,7 @@ class Qobuz(Downloader):
         try:
             with suppress_stdout_stderr():
                 logger.info(
-                    f"{self.name} downloading album with id {album_id}")
+                    f"{self.name} downloading album with id '{album_id}'")
                 self.qobuz.download_from_id(
                     item_id=album_id, album=True, alt_path=path
                 )
