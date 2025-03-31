@@ -49,14 +49,14 @@ class Qobuz(Downloader):
                     f"{self.name} successfully matched track with isrc '{isrc}'")
                 return track['album']['url']
             except Exception as e:
-                logger.error("{self.name} ran into an error: {e}")
+                logger.error(f"{self.name} ran into an error: {e}")
 
         query = f"{artist} {title}"
         try:
             results = self.qobuz.search_by_type(
                 query=query, item_type="album", lucky=True)
         except Exception as e:
-            logger.error("{self.name} ran into an error: {e}")
+            logger.error(f"{self.name} ran into an error: {e}")
             results = []
 
         if results is not None and len(results) > 0:
