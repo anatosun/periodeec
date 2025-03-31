@@ -221,9 +221,8 @@ class BeetsHandler:
         success = False
         imported = []
 
-        try:
-
-            if search_id != "":
+        if search_id != "":
+            try:
                 logger.info(
                     f"Attempting to autotag '{path}' with search_id '{search_id}'")
                 config["import"]["search_ids"] = [search_id]
@@ -235,9 +234,11 @@ class BeetsHandler:
                 session.run()
                 success = session.success
                 imported = session.task.imported_items()
+            except Exception as e:
+                logger.error(f"Beets import failed: {e}")
 
-            if self.fuzzy and not success:
-
+        if self.fuzzy and not success:
+            try:
                 logger.info(
                     f"Attempting to autotag '{path}' without search_id")
                 config["import"]["search_ids"] = []
@@ -249,10 +250,8 @@ class BeetsHandler:
                 session.run()
                 success = session.success
                 imported = session.task.imported_items()
-
-        except Exception as e:
-            logger.error(f"Beets import failed: {e}")
-            return False
+            except Exception as e:
+                logger.error(f"Beets import failed: {e}")
 
         if success:
             try:
