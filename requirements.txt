@@ -1,6 +1,6 @@
 requests
 spotipy
-git+https://github.com/dieser-niko/spotipy-anon@bugfix/totp
+spotipy-anon
 async-timeout
 git+https://github.com/beetbox/beets.git
 tidal-dl
