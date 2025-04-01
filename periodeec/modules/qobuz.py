@@ -27,15 +27,18 @@ logger.setLevel(logging.INFO)
 class Qobuz(Downloader):
 
     def __init__(self,  email: str, password: str, quality=27, embed_art=True, cover_og_quality=False):
-        super().__init__("Qobuz")
+        super().__init__("qobuz-dl")
         if email == "" or password == "":
             raise ValueError("Email and password cannot be empty.")
-
-        self.qobuz = QobuzDL(quality=quality, embed_art=embed_art,
-                             cover_og_quality=cover_og_quality)
-        self.qobuz.get_tokens()
-        self.qobuz.initialize_client(
-            email, password, self.qobuz.app_id, self.qobuz.secrets)
+        try:
+            self.qobuz = QobuzDL(quality=quality, embed_art=embed_art,
+                                 cover_og_quality=cover_og_quality)
+            self.qobuz.get_tokens()
+            self.qobuz.initialize_client(
+                email, password, self.qobuz.app_id, self.qobuz.secrets)
+        except Exception as e:
+            logger.error(f"Failed to initialize {self.name}: exiting")
+            exit(1)
 
     def match(self, isrc: str, artist: str, title: str) -> str:
         query = isrc
