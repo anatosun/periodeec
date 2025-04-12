@@ -85,9 +85,9 @@ class PlexHandler:
                 existing_playlist.uploadPoster(url=playlist.poster)
                 existing_playlist.editSummary(summary=playlist.summary)
             return True
-        except:
+        except Exception as e:
             logger.info(
-                f"Creating new Plex playlist '{playlist.title}' for '{username}'")
+                f"Creating new Plex playlist '{playlist.title}' for '{username}': {e}")
             try:
                 new_playlist = plex_instance.createPlaylist(
                     playlist.title, items=items, smart=False)
