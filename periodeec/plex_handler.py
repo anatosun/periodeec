@@ -99,8 +99,12 @@ class PlexHandler:
                     f"Error creating playlist {playlist.title} for '{username}': {e}")
                 return False
 
-    def create(self, playlist: Playlist, username: str, collection: bool = False) -> bool:
+    def create(self, playlist: Playlist, username="", collection: bool = False) -> bool:
         """Create or update a Plex playlist or collection."""
+
+        if username == "" and not collection:
+            logger.error(
+                f"Failed to create playlist {playlist.title}, username not provided without 'collection' flag")
 
         if len(playlist.tracks) < 1:
             logger.error(
