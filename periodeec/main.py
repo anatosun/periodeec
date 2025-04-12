@@ -17,11 +17,11 @@ from periodeec.track import Track
 from periodeec.spotify_handler import SpotifyHandler
 
 
-
 COLOR_RESET = "\033[0m"
 COLOR_RED = "\033[31m"
 COLOR_GREEN = "\033[32m"
 COLOR_YELLOW = "\033[33m"
+
 
 class ColorFormatter(logging.Formatter):
     COLORS = {
@@ -35,6 +35,7 @@ class ColorFormatter(logging.Formatter):
         color = self.COLORS.get(record.levelname, "")
         message = super().format(record)
         return f"{color}{message}{COLOR_RESET}"
+
 
 formatter = ColorFormatter(
     fmt='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
@@ -52,15 +53,18 @@ root_logger.addHandler(handler)
 logger = logging.getLogger(__name__)
 
 
-
 def parse_args():
-    parser = argparse.ArgumentParser(description="Sync Spotify playlists to Plex")
+    parser = argparse.ArgumentParser(
+        description="Sync Spotify playlists to Plex")
     parser.add_argument('--config', type=str, help='Path to config directory')
-    parser.add_argument('--run', action='store_true', help='Run in schedule loop')
+    parser.add_argument('--run', action='store_true',
+                        help='Run in schedule loop')
     return parser.parse_args()
+
 
 def get_config_path(cli_value: str | None) -> str:
     return cli_value or os.getenv("PD_CONFIG", "/config")
+
 
 def should_run(cli_flag: bool) -> bool:
     env_val = os.getenv("PD_RUN", "").lower()
