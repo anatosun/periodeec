@@ -91,6 +91,10 @@ def sync_user(user: User, spotify_handler: SpotifyHandler, plex_handler: PlexHan
             playlist.tracks = playlist.update_tracklist(
                 tracks, playlist.tracks)
 
+            if len(playlist.tracks):
+                logger.warning(f"Skipping empty playlist '{playlist.title}'")
+                continue
+
             for track in playlist.tracks:
                 if track.path is None or track.path == "":
                     exists, path = bt.exists(
