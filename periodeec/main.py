@@ -134,7 +134,8 @@ def sync_user(user: User, spotify_handler: SpotifyHandler, plex_handler: PlexHan
                 logger.info(
                     f"Playlist '{playlist.title}' is up-to-date for '{username}'")
                 continue
-            success = plex_handler.create(playlist, username, False)
+            collection = username == 'collection'
+            success = plex_handler.create(playlist, username, collection)
             if success:
                 playlist.update_for(username)
                 playlist.save()
