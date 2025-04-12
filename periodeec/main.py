@@ -95,7 +95,7 @@ def sync_user(user: User, spotify_handler: SpotifyHandler, plex_handler: PlexHan
             playlist.tracks = playlist.update_tracklist(
                 tracks, playlist.tracks)
 
-            if len(playlist.tracks):
+            if len(playlist.tracks) < 1:
                 logger.warning(f"Skipping empty playlist '{playlist.title}'")
                 continue
 
