@@ -5,10 +5,10 @@ from urllib import parse
 from urllib.parse import urlparse
 import logging
 from beets.library import Library
-from beets.library import plugins
 from beets import config
+from beets import plugins
 from beets.autotag import Recommendation
-from beets.importer import ImportSession, action, ImportTask
+from beets.importer import ImportSession, ImportTask
 from beets.dbcore.query import SubstringQuery, AndQuery
 from beetsplug import plexupdate
 logger = logging.getLogger(__name__)
