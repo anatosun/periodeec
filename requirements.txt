@@ -2,7 +2,7 @@ requests
 spotipy
 spotipy-anon
 async-timeout
-beets
+beets>=2.4.0,<3.0.0
 deemix
 git+https://github.com/streetsamurai00mi/qz-dl.git
 colorama

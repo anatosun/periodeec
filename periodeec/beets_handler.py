@@ -8,7 +8,19 @@ from beets.library import Library
 from beets import config
 from beets import plugins
 from beets.autotag import Recommendation
-from beets.importer import ImportSession, action, ImportTask
+from beets.importer import ImportSession, ImportTask
+
+# Handle beets version compatibility for action constants
+try:
+    from beets.importer import action
+except ImportError:
+    # In beets 2.4.0+, action constants were moved due to importer UI overhaul
+    # Define the constants we need for compatibility
+    class action:
+        SKIP = 'skip'
+        # Add other actions if needed in the future
+        APPLY = 'apply'
+        ASIS = 'asis'
 from beets.dbcore.query import SubstringQuery, AndQuery, OrQuery
 from beetsplug import plexupdate
 
