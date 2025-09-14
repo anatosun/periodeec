@@ -112,7 +112,7 @@ class BeetsHandler:
         
         # Plugin configuration
         config["plugins"] = beets_plugins
-        plugins.load_plugins(config["plugins"].as_str_seq())
+        plugins.load_plugins()
         loaded = [p.name for p in plugins.find_plugins()]
         logger.info(f"Loaded Beets plugins: {loaded}")
         
