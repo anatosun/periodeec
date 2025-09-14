@@ -1,0 +1,69 @@
+version: '3.8'
+
+# Example docker-compose file showing how to use different image tags
+# Copy this to docker-compose.yml and customize for your needs
+
+services:
+  periodeec-main:
+    # Use the latest stable image from main branch
+    image: ghcr.io/anatosun/periodeec:latest
+    container_name: periodeec
+    restart: unless-stopped
+    volumes:
+      - ./config:/config
+      - ./music:/app/music
+      - ./downloads:/app/downloads
+      - ./failed:/app/failed
+      - ./playlists:/app/playlists
+      - ./m3u:/app/m3u
+      - ./cache:/app/cache
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Paris
+      - PERIODEEC_CONFIG=/config/config.yaml
+    # Uncomment to run once and exit
+    # command: python -m periodeec.main --once
+    # Or run in scheduled mode (default)
+    command: python -m periodeec.main --run
+
+  # Example: Use develop branch image for testing
+  periodeec-dev:
+    image: ghcr.io/anatosun/periodeec:develop
+    container_name: periodeec-dev
+    restart: "no"
+    volumes:
+      - ./config:/config
+      - ./music:/app/music
+      - ./downloads:/app/downloads
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Paris
+      - PERIODEEC_CONFIG=/config/config.yaml
+    command: python -m periodeec.main --once --status
+    profiles:
+      - dev  # Only start with: docker-compose --profile dev up
+
+  # Example: Use a specific feature branch
+  periodeec-feature:
+    image: ghcr.io/anatosun/periodeec:feature-new-downloader
+    container_name: periodeec-feature
+    restart: "no"
+    volumes:
+      - ./config:/config
+      - ./music:/app/music
+    environment:
+      - PUID=1000
+      - PGID=1000
+    command: python -m periodeec.main --validate-config
+    profiles:
+      - feature
+
+# Uncomment to add a database or other services
+# volumes:
+#   periodeec-data:
+
+# networks:
+#   periodeec-net:
+#     driver: bridge
