@@ -1,42 +1,157 @@
-name: Deploy Images to GHCR
+name: Build and Deploy Docker Images to GHCR
 
 on:
   push:
     branches:
       - main
+      - develop
+      - 'feature/**'
+      - 'hotfix/**'
+      - 'release/**'
+  pull_request:
+    branches:
+      - main
+      - develop
   workflow_dispatch:
 
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
 jobs:
-  push-store-image:
+  build-and-push:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: "."
+    permissions:
+      contents: read
+      packages: write
+
     steps:
-      - name: "Checkout GitHub Action"
-        uses: actions/checkout@main
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: "Login to GitHub Container Registry"
-        uses: docker/login-action@v1
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
         with:
-          registry: ghcr.io
-          username: ${{github.actor}}
-          password: ${{secrets.GITHUB_TOKEN}}
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: "Build amd64 Periodeec Image"
+      - name: Generate image tags
+        id: meta
         run: |
-          docker buildx build --platform linux/amd64 -t ghcr.io/${{github.actor}}/periodeec:latest-amd64 --load .
-          docker push ghcr.io/${{github.actor}}/periodeec:latest-amd64
-          docker buildx build --platform linux/amd64 -t ghcr.io/${{github.actor}}/periodeec:latest --load .
-          docker push ghcr.io/${{github.actor}}/periodeec:latest
+          # Get the branch name and sanitize it for Docker tags
+          BRANCH_NAME="${{ github.head_ref || github.ref_name }}"
+          SANITIZED_BRANCH=$(echo "$BRANCH_NAME" | sed 's/[^a-zA-Z0-9._-]/-/g' | tr '[:upper:]' '[:lower:]')
 
-      - name: "Build arm64v8 Periodeec Image"
+          # Set base image name
+          IMAGE_BASE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+
+          # Generate tags based on event type and branch
+          TAGS=""
+
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            # For pull requests, use PR number and source branch
+            PR_NUM="${{ github.event.number }}"
+            TAGS="${IMAGE_BASE}:pr-${PR_NUM},${IMAGE_BASE}:pr-${PR_NUM}-${SANITIZED_BRANCH}"
+          elif [[ "$BRANCH_NAME" == "main" ]]; then
+            # For main branch, use latest and main tags
+            TAGS="${IMAGE_BASE}:latest,${IMAGE_BASE}:main,${IMAGE_BASE}:${{ github.sha }}"
+          elif [[ "$BRANCH_NAME" == "develop" ]]; then
+            # For develop branch
+            TAGS="${IMAGE_BASE}:develop,${IMAGE_BASE}:dev-${{ github.sha }}"
+          elif [[ "$BRANCH_NAME" == release/* ]]; then
+            # For release branches, extract version if possible
+            VERSION=$(echo "$BRANCH_NAME" | sed 's/release\///')
+            TAGS="${IMAGE_BASE}:release-${VERSION},${IMAGE_BASE}:${SANITIZED_BRANCH}"
+          elif [[ "$BRANCH_NAME" == hotfix/* ]]; then
+            # For hotfix branches
+            HOTFIX=$(echo "$BRANCH_NAME" | sed 's/hotfix\///')
+            TAGS="${IMAGE_BASE}:hotfix-${HOTFIX},${IMAGE_BASE}:${SANITIZED_BRANCH}"
+          else
+            # For feature branches and others
+            TAGS="${IMAGE_BASE}:${SANITIZED_BRANCH},${IMAGE_BASE}:branch-${{ github.sha }}"
+          fi
+
+          echo "tags=${TAGS}" >> $GITHUB_OUTPUT
+          echo "branch=${SANITIZED_BRANCH}" >> $GITHUB_OUTPUT
+
+          # Also set labels
+          echo "labels<<EOF" >> $GITHUB_OUTPUT
+          echo "org.opencontainers.image.title=Periodeec" >> $GITHUB_OUTPUT
+          echo "org.opencontainers.image.description=Music Synchronization Tool" >> $GITHUB_OUTPUT
+          echo "org.opencontainers.image.url=https://github.com/${{ github.repository }}" >> $GITHUB_OUTPUT
+          echo "org.opencontainers.image.source=https://github.com/${{ github.repository }}" >> $GITHUB_OUTPUT
+          echo "org.opencontainers.image.version=${SANITIZED_BRANCH}" >> $GITHUB_OUTPUT
+          echo "org.opencontainers.image.revision=${{ github.sha }}" >> $GITHUB_OUTPUT
+          echo "org.opencontainers.image.created=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Build and push Docker image (AMD64)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILDTIME=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+            VERSION=${{ steps.meta.outputs.branch }}
+            REVISION=${{ github.sha }}
+
+      - name: Build and push Docker image (ARM64)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}-arm64
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILDTIME=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+            VERSION=${{ steps.meta.outputs.branch }}
+            REVISION=${{ github.sha }}
+
+      - name: Create manifest list (Multi-arch)
         run: |
-          docker buildx create --use
-          docker buildx build --platform linux/arm64 -t ghcr.io/${{github.actor}}/periodeec:arm64v8 --load .
-          docker push ghcr.io/${{github.actor}}/periodeec:arm64v8
+          # Only create manifest for main/develop branches to avoid too many manifests
+          if [[ "${{ github.head_ref || github.ref_name }}" == "main" ]] || [[ "${{ github.head_ref || github.ref_name }}" == "develop" ]]; then
+            TAGS="${{ steps.meta.outputs.tags }}"
 
-      # - name: "Build arm32v7 Periodeec Image"
-      #   run: |
-      #     docker buildx build --platform linux/arm/v7 -t ghcr.io/${{github.actor}}/periodeec:arm32v7 --load .
-      #     docker push ghcr.io/${{github.actor}}/periodeec:arm32v7
+            # Create manifest list for each tag (combining AMD64 and ARM64)
+            for TAG in $(echo $TAGS | tr "," " "); do
+              if [[ ! "$TAG" =~ -arm64$ ]]; then  # Skip ARM64-specific tags
+                docker buildx imagetools create \
+                  --tag $TAG \
+                  ${TAG} \
+                  ${TAG}-arm64
+                echo "Created manifest list for: $TAG"
+              fi
+            done
+          fi
+
+      - name: Summary
+        run: |
+          echo "## 🐳 Docker Image Built Successfully!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** \`${{ github.head_ref || github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Event:** \`${{ github.event_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Image Tags Created:" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.meta.outputs.tags }}" | tr "," "\n" >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.meta.outputs.tags }}-arm64" | tr "," "\n" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🚀 Pull the image:" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.branch }}" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
