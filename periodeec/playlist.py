@@ -1,4 +1,4 @@
-from periodeec.track import Track
+from periodeec.schema import Track
 import logging
 import json
 import os

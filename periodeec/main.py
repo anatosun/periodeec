@@ -1,222 +1,894 @@
-from periodeec import download_manager
+#!/usr/bin/env python3
+"""
+Periodeec - Music Synchronization Tool
+Main application entry point with comprehensive error handling, scheduling, and monitoring.
+"""
+
 import argparse
+import asyncio
+import logging
+import logging.handlers
+import os
+import signal
+import sys
+import time
+import importlib
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Any
+from pathlib import Path
+import schedule
+import threading
+from concurrent.futures import ThreadPoolExecutor
+import json
+
+# Imports
+from periodeec.config import load_config, ConfigurationError, Config
 from periodeec.beets_handler import BeetsHandler
 from periodeec.plex_handler import PlexHandler
-from dataclasses import dataclass
-import os
-import sys
-import yaml
-import logging
-import schedule
-import importlib
-import time
-from periodeec.modules.downloader import Downloader
-from periodeec.config import Config, Settings, User
-from periodeec.download_manager import DownloadManager
-from periodeec.track import Track
 from periodeec.spotify_handler import SpotifyHandler
+from periodeec.download_manager import DownloadManager
+from periodeec.schema import Track
+from periodeec.schema import User
+from periodeec.playlist import Playlist
+from periodeec.modules.downloader import Downloader
 
 
-COLOR_RESET = "\033[0m"
-COLOR_RED = "\033[31m"
-COLOR_GREEN = "\033[32m"
-COLOR_YELLOW = "\033[33m"
+class ApplicationStats:
+    """Application-wide statistics tracking."""
+    
+    def __init__(self):
+        self.start_time = datetime.now()
+        self.total_sync_operations = 0
+        self.successful_syncs = 0
+        self.failed_syncs = 0
+        self.total_tracks_processed = 0
+        self.total_tracks_downloaded = 0
+        self.total_playlists_synced = 0
+        self.downloader_usage = {}
+        self.last_sync_times = {}
+        self.error_counts = {}
+    
+    def record_sync(self, sync_type: str, success: bool, track_count: int = 0, 
+                   downloaded_count: int = 0):
+        """Record sync operation statistics."""
+        self.total_sync_operations += 1
+        self.total_tracks_processed += track_count
+        self.total_tracks_downloaded += downloaded_count
+        
+        if success:
+            self.successful_syncs += 1
+            if sync_type == 'playlist':
+                self.total_playlists_synced += 1
+        else:
+            self.failed_syncs += 1
+        
+        self.last_sync_times[sync_type] = datetime.now()
+    
+    def record_downloader_usage(self, downloader_name: str):
+        """Record downloader usage."""
+        self.downloader_usage[downloader_name] = self.downloader_usage.get(downloader_name, 0) + 1
+    
+    def record_error(self, error_type: str):
+        """Record error occurrence."""
+        self.error_counts[error_type] = self.error_counts.get(error_type, 0) + 1
+    
+    @property
+    def uptime_hours(self) -> float:
+        """Get application uptime in hours."""
+        return (datetime.now() - self.start_time).total_seconds() / 3600
+    
+    @property
+    def success_rate(self) -> float:
+        """Get sync success rate percentage."""
+        if self.total_sync_operations == 0:
+            return 0.0
+        return (self.successful_syncs / self.total_sync_operations) * 100
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert stats to dictionary."""
+        return {
+            'start_time': self.start_time.isoformat(),
+            'uptime_hours': self.uptime_hours,
+            'total_sync_operations': self.total_sync_operations,
+            'successful_syncs': self.successful_syncs,
+            'failed_syncs': self.failed_syncs,
+            'success_rate': self.success_rate,
+            'total_tracks_processed': self.total_tracks_processed,
+            'total_tracks_downloaded': self.total_tracks_downloaded,
+            'total_playlists_synced': self.total_playlists_synced,
+            'downloader_usage': self.downloader_usage,
+            'last_sync_times': {k: v.isoformat() for k, v in self.last_sync_times.items()},
+            'error_counts': self.error_counts
+        }
 
 
 class ColorFormatter(logging.Formatter):
+    """Colored logging formatter for console output."""
+    
     COLORS = {
-        'INFO': COLOR_GREEN,
-        'WARNING': COLOR_YELLOW,
-        'ERROR': COLOR_RED,
-        'CRITICAL': COLOR_RED,
+        'DEBUG': '\033[36m',      # Cyan
+        'INFO': '\033[32m',       # Green
+        'WARNING': '\033[33m',    # Yellow
+        'ERROR': '\033[31m',      # Red
+        'CRITICAL': '\033[35m'    # Magenta
     }
-
+    RESET = '\033[0m'
+    
     def format(self, record):
-        color = self.COLORS.get(record.levelname, "")
-        message = super().format(record)
-        return f"{color}{message}{COLOR_RESET}"
+        if hasattr(self, '_use_color') and self._use_color:
+            color = self.COLORS.get(record.levelname, '')
+            record.levelname = f"{color}{record.levelname}{self.RESET}"
+        return super().format(record)
 
 
-formatter = ColorFormatter(
-    fmt='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
-handler = logging.StreamHandler(sys.stdout)
-handler.setFormatter(formatter)
-
-root_logger = logging.getLogger()
-root_logger.setLevel(logging.INFO)
-
-# Remove any existing handlers before adding our own
-root_logger.handlers.clear()
-root_logger.addHandler(handler)
-logger = logging.getLogger(__name__)
+class PeriodeecApplication:
+    """Main application class with comprehensive functionality."""
+    
+    def __init__(self, config_path: str = "config/config.yaml"):
+        """Initialize the application."""
+        self.config_path = config_path
+        self.config: Optional[Config] = None
+        self.shutdown_event = threading.Event()
+        self.stats = ApplicationStats()
+        self.executor = ThreadPoolExecutor(max_workers=4)
+        
+        # Component instances
+        self.spotify_handler: Optional[SpotifyHandler] = None
+        self.plex_handler: Optional[PlexHandler] = None
+        self.beets_handler: Optional[BeetsHandler] = None
+        self.download_manager: Optional[DownloadManager] = None
+        
+        # Setup signal handlers
+        signal.signal(signal.SIGINT, self._signal_handler)
+        signal.signal(signal.SIGTERM, self._signal_handler)
+        
+        # Logger will be setup in initialize()
+        self.logger: Optional[logging.Logger] = None
+    
+    def _signal_handler(self, signum, frame):
+        """Handle shutdown signals gracefully."""
+        if self.logger:
+            self.logger.info(f"Received signal {signum}, initiating graceful shutdown...")
+        self.shutdown_event.set()
+    
+    def setup_logging(self):
+        """Setup logging configuration."""
+        # Clear any existing handlers
+        logging.getLogger().handlers.clear()
+        
+        # Configure root logger
+        root_logger = logging.getLogger()
+        root_logger.setLevel(getattr(logging, self.config.logging.level.upper()))
+        
+        # Console handler
+        if self.config.logging.console:
+            console_handler = logging.StreamHandler(sys.stdout)
+            
+            if self.config.logging.color:
+                formatter = ColorFormatter(fmt=self.config.logging.format)
+                formatter._use_color = True
+            else:
+                formatter = logging.Formatter(fmt=self.config.logging.format)
+            
+            console_handler.setFormatter(formatter)
+            root_logger.addHandler(console_handler)
+        
+        # File handler
+        if self.config.logging.file:
+            file_handler = logging.handlers.RotatingFileHandler(
+                self.config.logging.file,
+                maxBytes=self.config.logging.max_size_mb * 1024 * 1024,
+                backupCount=self.config.logging.backup_count,
+                encoding='utf-8'
+            )
+            
+            file_formatter = logging.Formatter(fmt=self.config.logging.format)
+            file_handler.setFormatter(file_formatter)
+            root_logger.addHandler(file_handler)
+        
+        self.logger = logging.getLogger(__name__)
+        self.logger.info("Logging system initialized")
+    
+    def initialize(self) -> bool:
+        """Initialize the application components."""
+        try:
+            # Load configuration
+            self.logger = logging.getLogger(__name__)  # Temporary logger
+            self.logger.info(f"Loading configuration from {self.config_path}")
+            
+            self.config = load_config(self.config_path)
+            
+            # Setup proper logging
+            self.setup_logging()
+            self.logger.info("Configuration loaded successfully")
+            
+            # Initialize components
+            if not self._initialize_downloaders():
+                return False
+            
+            if not self._initialize_handlers():
+                return False
+            
+            # Validate connections
+            if not self._validate_connections():
+                return False
+            
+            self.logger.info("Application initialized successfully")
+            return True
+            
+        except ConfigurationError as e:
+            print(f"Configuration error: {e}", file=sys.stderr)
+            return False
+        except Exception as e:
+            print(f"Initialization failed: {e}", file=sys.stderr)
+            return False
+    
+    def _initialize_downloaders(self) -> bool:
+        """Initialize download components."""
+        try:
+            downloaders = []
+            
+            for name, downloader_config in self.config.get_enabled_downloaders().items():
+                self.logger.info(f"Initializing downloader: {name}")
+                
+                try:
+                    # Import downloader module
+                    module = importlib.import_module(f"periodeec.modules.{name}")
+                    downloader_class = getattr(module, name.capitalize())
+                    
+                    # Create downloader instance
+                    downloader_params = downloader_config.__dict__.copy()
+                    downloader_params.pop('name', None)
+                    downloader_params.pop('enabled', None)
+                    
+                    downloader = downloader_class(**downloader_params)
+                    
+                    # Validate downloader
+                    if downloader.validate_credentials():
+                        downloaders.append(downloader)
+                        self.logger.info(f"Downloader {name} initialized successfully")
+                    else:
+                        self.logger.error(f"Downloader {name} credential validation failed")
+                        
+                except Exception as e:
+                    self.logger.error(f"Failed to initialize downloader {name}: {e}")
+                    self.stats.record_error(f"downloader_init_{name}")
+            
+            if not downloaders:
+                self.logger.error("No valid downloaders available")
+                return False
+            
+            # Initialize download manager
+            self.download_manager = DownloadManager(
+                downloaders=downloaders,
+                download_path=self.config.paths.downloads,
+                failed_path=self.config.paths.failed,
+                enable_retry=True,
+                max_retries=2,
+                stats_file=os.path.join(self.config.paths.cache, "download_stats.json")
+            )
+            
+            self.logger.info(f"Download manager initialized with {len(downloaders)} downloaders")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Failed to initialize downloaders: {e}")
+            return False
+    
+    def _initialize_handlers(self) -> bool:
+        """Initialize service handlers."""
+        try:
+            # Initialize Beets handler
+            self.beets_handler = BeetsHandler(
+                library=self.config.beets.library,
+                directory=self.config.beets.directory,
+                plex_baseurl=self.config.plex.baseurl,
+                plex_token=self.config.plex.token,
+                plex_section=self.config.plex.section,
+                spotify_client_id=self.config.spotify.client_id,
+                spotify_client_secret=self.config.spotify.client_secret,
+                beets_plugins=self.config.beets.plugins,
+                fuzzy=self.config.beets.fuzzy,
+                auto_import=self.config.beets.auto_import,
+                strong_rec_thresh=self.config.beets.strong_rec_thresh,
+                timid=self.config.beets.timid,
+                duplicate_action=self.config.beets.duplicate_action
+            )
+            
+            # Initialize Spotify handler
+            spotify_config = self.config.spotify
+            self.spotify_handler = SpotifyHandler(
+                client_id=spotify_config.client_id,
+                client_secret=spotify_config.client_secret,
+                path=self.config.paths.playlists,
+                anonymous=spotify_config.anonymous,
+                cache_enabled=spotify_config.cache_enabled,
+                cache_ttl_hours=spotify_config.cache_ttl_hours,
+                rate_limit_rpm=int(spotify_config.rate_limit_rpm * self.config.advanced.rate_limit_buffer),
+                retry_attempts=spotify_config.retry_attempts,
+                request_timeout=spotify_config.request_timeout
+            )
+            
+            # Initialize Plex handler
+            plex_config = self.config.plex
+            self.plex_handler = PlexHandler(
+                baseurl=plex_config.baseurl,
+                token=plex_config.token,
+                section=plex_config.section,
+                m3u_path=self.config.paths.m3u,
+                verify_ssl=plex_config.verify_ssl,
+                timeout=plex_config.timeout,
+                retry_attempts=plex_config.retry_attempts
+            )
+            
+            self.logger.info("All handlers initialized successfully")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Failed to initialize handlers: {e}")
+            return False
+    
+    def _validate_connections(self) -> bool:
+        """Validate connections to external services."""
+        validation_results = []
+        
+        # Validate Spotify
+        if self.spotify_handler.validate_connection():
+            self.logger.info("Spotify connection validated")
+            validation_results.append(True)
+        else:
+            self.logger.error("Spotify connection validation failed")
+            validation_results.append(False)
+        
+        # Validate Plex
+        plex_result = self.plex_handler.validate_connection()
+        if plex_result.success:
+            self.logger.info("Plex connection validated")
+            validation_results.append(True)
+        else:
+            self.logger.error(f"Plex validation failed: {plex_result.message}")
+            validation_results.append(False)
+        
+        # Validate Beets
+        beets_result = self.beets_handler.validate_library()
+        if beets_result.success:
+            self.logger.info("Beets library validated")
+            validation_results.append(True)
+        else:
+            self.logger.error(f"Beets validation failed: {beets_result.message}")
+            validation_results.append(False)
+        
+        return all(validation_results)
+    
+    def sync_playlist(self, playlist_config, playlist_name: str) -> bool:
+        """Sync a single playlist."""
+        try:
+            self.logger.info(f"Starting sync for playlist: {playlist_name}")
+            start_time = time.time()
+            
+            # Get playlist info from Spotify
+            playlist_info = self.spotify_handler.get_playlist_info(playlist_config.url)
+            if not playlist_info:
+                self.logger.error(f"Could not fetch playlist info for {playlist_name}")
+                return False
+            
+            # Create playlist object
+            playlist_title = playlist_config.title or playlist_info.get('name', playlist_name)
+            playlist_path = os.path.join(self.config.paths.playlists, f"{playlist_info.get('id', playlist_name)}.json")
+            
+            playlist = Playlist(
+                title=playlist_title,
+                tracks=[],
+                id=playlist_info.get('id', ''),
+                path=playlist_path,
+                number_of_tracks=playlist_info.get('tracks', {}).get('total', 0),
+                description=playlist_config.summary or playlist_info.get('description', ''),
+                snapshot_id=playlist_info.get('snapshot_id', ''),
+                poster=playlist_config.poster or (playlist_info.get('images', [{}])[0].get('url', '') if playlist_info.get('images') else ''),
+                summary=playlist_config.summary or playlist_info.get('description', ''),
+                url=playlist_config.url
+            )
+            
+            # Check if update needed
+            if playlist.is_up_to_date() and not getattr(playlist_config, 'force_update', False):
+                self.logger.info(f"Playlist '{playlist_title}' is up to date")
+                
+                # Still sync to Plex users if needed
+                success = True
+                for username in playlist_config.sync_to_plex_users:
+                    if not playlist.is_up_to_date_for(username):
+                        plex_result = self._sync_to_plex(playlist, playlist_config, username)
+                        if plex_result:
+                            playlist.update_for(username)
+                            playlist.save()
+                        else:
+                            success = False
+                
+                return success
+            
+            # Fetch tracks
+            self.logger.info(f"Fetching tracks for playlist: {playlist_title}")
+            tracks = self.spotify_handler.tracks(playlist_config.url, playlist.number_of_tracks)
+            
+            if not tracks:
+                self.logger.warning(f"No tracks found for playlist: {playlist_title}")
+                return False
+            
+            # Update tracklist
+            playlist.tracks = playlist.update_tracklist(tracks, playlist.tracks)
+            
+            # Process tracks (find in library or download)
+            processed_count = 0
+            downloaded_count = 0
+            
+            for track in playlist.tracks:
+                if self.shutdown_event.is_set():
+                    self.logger.info("Shutdown requested, stopping track processing")
+                    break
+                
+                if not track.path:
+                    # Check if exists in library
+                    exists, path = self.beets_handler.exists(
+                        isrc=track.isrc,
+                        artist=track.artist,
+                        title=track.title,
+                        album=track.album
+                    )
+                    
+                    if exists:
+                        track.mark_found_in_library(path)
+                        self.logger.debug(f"Found in library: {track.title}")
+                    elif playlist_config.download_missing:
+                        # Download track
+                        self.logger.info(f"Downloading: {track.artist} - {track.title}")
+                        
+                        download_result = self.download_manager.enqueue(track)
+                        self.stats.record_downloader_usage(
+                            download_result.metadata.get('downloader_used', 'unknown')
+                        )
+                        
+                        if download_result.success:
+                            # Import to Beets
+                            import_result = self.beets_handler.add(
+                                download_result.path,
+                                track.album_url
+                            )
+                            
+                            if import_result.success:
+                                # Find imported track
+                                exists, path = self.beets_handler.exists(
+                                    isrc=track.isrc,
+                                    artist=track.artist,
+                                    title=track.title
+                                )
+                                if exists:
+                                    track.mark_found_in_library(path)
+                                    downloaded_count += 1
+                            
+                            track.mark_download_attempt(
+                                downloader_name=download_result.metadata.get('downloader_used', 'unknown'),
+                                success=import_result.success,
+                                error_message=import_result.message if not import_result.success else "",
+                                match_quality=download_result.match_quality.value if download_result.match_quality else "",
+                                download_time=download_result.metadata.get('download_time', 0.0)
+                            )
+                
+                processed_count += 1
+            
+            # Save playlist
+            playlist.save()
+            
+            # Sync to Plex
+            for username in playlist_config.sync_to_plex_users:
+                if self._sync_to_plex(playlist, playlist_config, username):
+                    playlist.update_for(username)
+                    playlist.save()
+            
+            # Record statistics
+            sync_time = time.time() - start_time
+            self.stats.record_sync('playlist', True, processed_count, downloaded_count)
+            
+            self.logger.info(
+                f"Playlist sync completed: {playlist_title} "
+                f"({processed_count} tracks, {downloaded_count} downloaded) "
+                f"in {sync_time:.1f}s"
+            )
+            
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Failed to sync playlist {playlist_name}: {e}")
+            self.stats.record_sync('playlist', False)
+            self.stats.record_error('playlist_sync')
+            return False
+    
+    def _sync_to_plex(self, playlist: Playlist, playlist_config, username: str) -> bool:
+        """Sync playlist to Plex for a specific user."""
+        try:
+            sync_mode = getattr(playlist_config, 'sync_mode', 'playlist')
+            create_m3u = getattr(playlist_config, 'create_m3u', True)
+            
+            if sync_mode in ['playlist', 'both']:
+                result = self.plex_handler.create(
+                    playlist=playlist,
+                    username=username,
+                    collection=False,
+                    create_m3u=create_m3u
+                )
+                
+                if not result.success:
+                    self.logger.error(f"Failed to create Plex playlist for {username}: {result.message}")
+                    return False
+            
+            if sync_mode in ['collection', 'both']:
+                result = self.plex_handler.create(
+                    playlist=playlist,
+                    username="",  # Collections are server-wide
+                    collection=True,
+                    create_m3u=False
+                )
+                
+                if not result.success:
+                    self.logger.error(f"Failed to create Plex collection: {result.message}")
+                    return False
+            
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Failed to sync to Plex: {e}")
+            return False
+    
+    def sync_user(self, user_config, username: str) -> bool:
+        """Sync all playlists for a user."""
+        try:
+            self.logger.info(f"Starting user sync: {username}")
+            start_time = time.time()
+            
+            # Get user info
+            spotify_user = self.spotify_handler.user(user_config.spotify_username)
+            
+            # Get playlists
+            playlists = self.spotify_handler.playlists(
+                username=user_config.spotify_username,
+                include_collaborative=user_config.include_collaborative,
+                include_followed=user_config.include_followed
+            )
+            
+            if not playlists:
+                self.logger.warning(f"No playlists found for user: {username}")
+                return False
+            
+            success_count = 0
+            
+            for playlist in playlists:
+                if self.shutdown_event.is_set():
+                    break
+                
+                # Create temporary playlist config
+                temp_config = type('PlaylistConfig', (), {
+                    'url': playlist.url,
+                    'title': None,
+                    'sync_mode': 'playlist',
+                    'sync_to_plex_users': user_config.sync_to_plex_users,
+                    'download_missing': user_config.download_missing,
+                    'create_m3u': user_config.create_m3u,
+                    'summary': None,
+                    'poster': None
+                })()
+                
+                if self.sync_playlist(temp_config, f"{username}_{playlist.title}"):
+                    success_count += 1
+            
+            sync_time = time.time() - start_time
+            self.logger.info(
+                f"User sync completed: {username} "
+                f"({success_count}/{len(playlists)} playlists) "
+                f"in {sync_time:.1f}s"
+            )
+            
+            return success_count > 0
+            
+        except Exception as e:
+            self.logger.error(f"Failed to sync user {username}: {e}")
+            self.stats.record_error('user_sync')
+            return False
+    
+    def setup_scheduler(self):
+        """Setup scheduled tasks."""
+        self.logger.info("Setting up scheduler")
+        
+        # Schedule playlist syncs
+        for name, playlist_config in self.config.get_enabled_playlists().items():
+            schedule.every(playlist_config.schedule_minutes).minutes.do(
+                self.sync_playlist, playlist_config, name
+            )
+            self.logger.info(f"Scheduled playlist '{name}' every {playlist_config.schedule_minutes} minutes")
+        
+        # Schedule user syncs
+        for name, user_config in self.config.get_enabled_users().items():
+            schedule.every(user_config.schedule_minutes).minutes.do(
+                self.sync_user, user_config, name
+            )
+            self.logger.info(f"Scheduled user '{name}' every {user_config.schedule_minutes} minutes")
+        
+        # Schedule statistics save
+        if self.config.advanced.enable_statistics:
+            schedule.every(10).minutes.do(self._save_statistics)
+        
+        # Schedule health check
+        if self.config.advanced.health_check_interval_minutes > 0:
+            schedule.every(self.config.advanced.health_check_interval_minutes).minutes.do(
+                self._health_check
+            )
+    
+    def _save_statistics(self):
+        """Save application statistics."""
+        try:
+            if self.config.advanced.statistics_file:
+                stats_data = {
+                    'application': self.stats.to_dict(),
+                    'spotify': self.spotify_handler.get_stats() if self.spotify_handler else {},
+                    'downloads': self.download_manager.get_stats().to_dict() if self.download_manager else {},
+                    'beets': self.beets_handler.get_library_stats() if self.beets_handler else {}
+                }
+                
+                with open(self.config.advanced.statistics_file, 'w') as f:
+                    json.dump(stats_data, f, indent=2, default=str)
+                
+                self.logger.debug("Statistics saved")
+        except Exception as e:
+            self.logger.error(f"Failed to save statistics: {e}")
+    
+    def _health_check(self):
+        """Perform health check on all components."""
+        try:
+            self.logger.info("Performing health check")
+            
+            # Check Spotify connection
+            if not self.spotify_handler.validate_connection():
+                self.logger.warning("Spotify connection health check failed")
+                self.stats.record_error('health_check_spotify')
+            
+            # Check Plex connection
+            plex_result = self.plex_handler.validate_connection()
+            if not plex_result.success:
+                self.logger.warning(f"Plex connection health check failed: {plex_result.message}")
+                self.stats.record_error('health_check_plex')
+            
+            # Check Beets library
+            beets_result = self.beets_handler.validate_library()
+            if not beets_result.success:
+                self.logger.warning(f"Beets library health check failed: {beets_result.message}")
+                self.stats.record_error('health_check_beets')
+            
+            self.logger.info("Health check completed")
+            
+        except Exception as e:
+            self.logger.error(f"Health check failed: {e}")
+    
+    def run_once(self) -> bool:
+        """Run all sync operations once."""
+        self.logger.info("Running one-time sync")
+        
+        success = True
+        
+        # Sync playlists
+        for name, playlist_config in self.config.get_enabled_playlists().items():
+            if not self.sync_playlist(playlist_config, name):
+                success = False
+        
+        # Sync users
+        for name, user_config in self.config.get_enabled_users().items():
+            if not self.sync_user(user_config, name):
+                success = False
+        
+        return success
+    
+    def run_scheduler(self):
+        """Run the scheduler loop."""
+        self.logger.info("Starting scheduler")
+        
+        # Run initial sync
+        schedule.run_all()
+        
+        # Main scheduler loop
+        while not self.shutdown_event.is_set():
+            try:
+                schedule.run_pending()
+                time.sleep(1)
+            except Exception as e:
+                self.logger.error(f"Scheduler error: {e}")
+                time.sleep(5)
+        
+        self.logger.info("Scheduler stopped")
+    
+    def print_status(self):
+        """Print current application status."""
+        print("\n=== Periodeec Status ===")
+        print(f"Uptime: {self.stats.uptime_hours:.1f} hours")
+        print(f"Total sync operations: {self.stats.total_sync_operations}")
+        print(f"Success rate: {self.stats.success_rate:.1f}%")
+        print(f"Tracks processed: {self.stats.total_tracks_processed}")
+        print(f"Tracks downloaded: {self.stats.total_tracks_downloaded}")
+        print(f"Playlists synced: {self.stats.total_playlists_synced}")
+        
+        if self.spotify_handler:
+            self.spotify_handler.print_stats()
+        
+        if self.download_manager:
+            self.download_manager.print_stats()
+        
+        if self.beets_handler:
+            self.beets_handler.print_stats()
+        
+        print("=" * 24)
+    
+    def cleanup(self):
+        """Cleanup application resources."""
+        self.logger.info("Cleaning up application resources")
+        
+        try:
+            # Save final statistics
+            self._save_statistics()
+            
+            # Cleanup download manager
+            if self.download_manager:
+                self.download_manager.cleanup()
+            
+            # Cleanup executor
+            self.executor.shutdown(wait=True)
+            
+            self.logger.info("Cleanup completed")
+            
+        except Exception as e:
+            self.logger.error(f"Error during cleanup: {e}")
 
 
 def parse_args():
+    """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description="Sync Spotify playlists to Plex")
-    parser.add_argument('--config', type=str, help='Path to config directory')
-    parser.add_argument('--run', action='store_true',
-                        help='Run in schedule loop')
+        description="Periodeec - Music Synchronization Tool",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  %(prog)s --config /path/to/config.yaml --run
+  %(prog)s --once --status
+  %(prog)s --config-example > example-config.yaml
+        """
+    )
+    
+    parser.add_argument(
+        '--config', '-c',
+        type=str,
+        default=os.getenv("PERIODEEC_CONFIG", "config/config.yaml"),
+        help='Path to configuration file (default: config/config.yaml)'
+    )
+    
+    parser.add_argument(
+        '--run', '-r',
+        action='store_true',
+        help='Run in scheduled mode (continuous operation)'
+    )
+    
+    parser.add_argument(
+        '--once', '-o',
+        action='store_true',
+        help='Run sync operations once and exit'
+    )
+    
+    parser.add_argument(
+        '--status', '-s',
+        action='store_true',
+        help='Show status information and exit'
+    )
+    
+    parser.add_argument(
+        '--config-example',
+        action='store_true',
+        help='Generate example configuration and exit'
+    )
+    
+    parser.add_argument(
+        '--validate-config',
+        action='store_true',
+        help='Validate configuration and exit'
+    )
+    
+    parser.add_argument(
+        '--log-level',
+        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+        help='Override log level from config file'
+    )
+    
+    parser.add_argument(
+        '--version',
+        action='version',
+        version='Periodeec 2.0.0'
+    )
+    
     return parser.parse_args()
 
 
-def get_config_path(cli_value: str | None) -> str:
-    return cli_value or os.getenv("PD_CONFIG", "/config")
-
-
-def should_run(cli_flag: bool) -> bool:
-    env_val = os.getenv("PD_RUN", "").lower()
-    return cli_flag or env_val == "true"
-
-
-def sync_user(user: User, spotify_handler: SpotifyHandler, plex_handler: PlexHandler, bt: BeetsHandler, download_manager: DownloadManager):
-    spotify_username = user.spotify_username
-    plex_users = user.sync_to_plex_users
-
-    spotify_user = spotify_handler.user(spotify_username)
-    friendly_name = spotify_user.name
-
-    logger.info(f"Syncing Spotify user '{friendly_name}' to '{plex_users}'")
-    playlists = spotify_handler.playlists(spotify_username)
-
-    for playlist in playlists:
-        logger.info(f"Syncing playlist '{playlist.title}'")
-
-        if playlist.is_up_to_date():
-            logger.info(
-                f"Playlist '{playlist.title}' is the most recent version")
-        else:
-            logger.info(f"Updating playlist '{playlist.title}'")
-            tracks = spotify_handler.tracks(
-                playlist.url, playlist.number_of_tracks)
-            logger.info(f"Fetched {len(tracks)} tracks from Spotify")
-            playlist.tracks = playlist.update_tracklist(
-                tracks, playlist.tracks)
-
-            if len(playlist.tracks) < 1:
-                logger.warning(f"Skipping empty playlist '{playlist.title}'")
-                continue
-
-            for track in playlist.tracks:
-                if track.path is None or track.path == "":
-                    exists, path = bt.exists(
-                        isrc=track.isrc, artist=track.artist, title=track.title)
-                    if exists:
-                        track.path = path
-                    else:
-                        success, dl_path = download_manager.enqueue(
-                            track=track)
-
-                        if success:
-                            success = bt.add(
-                                dl_path, track.album_url)
-                            if success:
-                                exists, path = bt.exists(
-                                    isrc=track.isrc, artist=track.artist, title=track.title)
-                                if exists:
-                                    track.path = path
-                                else:
-                                    logger.error(
-                                        f"Could not retrieve freshly added track '{track.title}' by '{track.artist}'")
-                            else:
-                                logger.error(
-                                    f"Could not autotag track '{track.title}' by '{track.artist}'")
-
-                        else:
-                            logger.error(
-                                f"Could not download track '{track.title}' by '{track.artist}'")
-            playlist.save()
-
-        for username in plex_users:
-            if playlist.is_up_to_date_for(username):
-                logger.info(
-                    f"Playlist '{playlist.title}' is up-to-date for '{username}'")
-                continue
-            collection = username == 'collection'
-            success = plex_handler.create(playlist, username, collection)
-            if success:
-                playlist.update_for(username)
-                playlist.save()
-
-
-def sync(spotify_handler, plex_handler, config, bt, download_manager):
-    """Syncs Spotify playlists and users to Plex using the correct logic."""
-    if config.usernames:
-        for username in config.usernames.keys():
-            user = config.usernames[username]
-            logger.info(
-                f"Syncing {username}'s playlist every {user.schedule} minutes")
-            schedule.every(user.schedule).minutes.do(
-                sync_user, user, spotify_handler, plex_handler, bt, download_manager)
-
-
 def main():
-    args = parse_args()
-    config_path = get_config_path(args.config)
-    run_flag = should_run(args.run)
-
-    with open(os.path.join(config_path, "config.yaml"), 'r') as stream:
-        data = yaml.safe_load(stream)
-
-    settings_data = data.get('settings')
-    if not settings_data:
-        logger.error(f"Settings not found in {config_path}/config.yaml")
-        return
-
-    settings = Settings(**settings_data)
-    config = Config(
-        settings=settings,
-        usernames={user: User(**usr)
-                   for user, usr in data.get('usernames', {}).items()}
-    )
-
-    downloaders = []
-    for client in settings.clients:
-        logger.info(f"Importing module {client}")
-        module = f"periodeec.modules.{client}"
-        logging.getLogger(client).setLevel(logging.WARNING)
-        class_ = getattr(importlib.import_module(module), client.capitalize())
-        downloader = class_(
-            **settings.clients[client]) if settings.clients[client] else class_()
-        downloaders.append(downloader)
-        logging.getLogger(client).setLevel(logging.ERROR)
-
-        for name in logging.root.manager.loggerDict:
-            if name.startswith(client):
-                qlogger = logging.getLogger(name)
-                qlogger.setLevel(logging.CRITICAL + 1)
-                qlogger.propagate = False
-                qlogger.handlers.clear()
-
-    bt = BeetsHandler(**settings.beets,
-                      plex_baseurl=settings.plex['baseurl'],
-                      plex_token=settings.plex['token'],
-                      plex_section=settings.plex['section'],
-                      spotify_client_id=settings.spotify['client_id'],
-                      spotify_client_secret=settings.spotify['client_secret']
-                      )
-
-    logger.info("Initializing Spotify Handler")
-    spotify_handler = SpotifyHandler(
-        **config.settings.spotify, path=os.path.join(settings.beets["directory"], "playlists"))
-    logger.info("Initializing Plex Handler")
-    plex_handler = PlexHandler(
-        **settings.plex, m3u_path=os.path.join(settings.beets["directory"], "m3u"))
-
-    download_manager = DownloadManager(
-        downloaders=downloaders, download_path=settings.downloads, failed_path=settings.failed)
-
-    sync(spotify_handler, plex_handler, config, bt, download_manager)
-
-    if run_flag:
-        schedule.run_all()
-
-    while run_flag:
-        schedule.run_pending()
-        time.sleep(1)
+    """Main entry point."""
+    try:
+        # Parse arguments
+        args = parse_args()
+        
+        # Handle special cases
+        if args.config_example:
+            from periodeec.config import create_example_config
+            create_example_config()
+            return 0
+        
+        # Initialize application
+        app = PeriodeecApplication(args.config)
+        
+        if not app.initialize():
+            print("Failed to initialize application", file=sys.stderr)
+            return 1
+        
+        # Override log level if specified
+        if args.log_level:
+            logging.getLogger().setLevel(getattr(logging, args.log_level))
+            app.logger.info(f"Log level overridden to {args.log_level}")
+        
+        # Handle validation
+        if args.validate_config:
+            issues = app.config.validate_configuration()
+            if issues:
+                print("Configuration validation failed:")
+                for issue in issues:
+                    print(f"  - {issue}")
+                return 1
+            else:
+                print("Configuration is valid")
+                return 0
+        
+        # Handle status display
+        if args.status:
+            app.print_status()
+            return 0
+        
+        # Handle run modes
+        if args.once:
+            app.logger.info("Running in one-time sync mode")
+            success = app.run_once()
+            app.print_status()
+            return 0 if success else 1
+        
+        elif args.run or os.getenv("PERIODEEC_RUN", "").lower() == "true":
+            app.logger.info("Running in scheduled mode")
+            app.setup_scheduler()
+            
+            try:
+                app.run_scheduler()
+            except KeyboardInterrupt:
+                app.logger.info("Received interrupt signal")
+            
+            return 0
+        
+        else:
+            # Default: show help
+            print("No operation specified. Use --help for available options.")
+            print("Common usage:")
+            print("  --once    : Run sync once and exit")
+            print("  --run     : Run continuously with scheduler")
+            print("  --status  : Show current status")
+            return 1
+    
+    except Exception as e:
+        print(f"Fatal error: {e}", file=sys.stderr)
+        return 1
+    
+    finally:
+        # Cleanup
+        try:
+            if 'app' in locals():
+                app.cleanup()
+        except:
+            pass
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
