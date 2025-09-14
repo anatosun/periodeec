@@ -173,3 +173,12 @@ not_found.txt
 *.json
 music
 backup
+
+# beets
+library.blb
+
+# tools
+node_modules
+
+# utilities
+ctx.sh
