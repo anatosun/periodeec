@@ -89,11 +89,11 @@ jobs:
           echo "org.opencontainers.image.created=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Build and push Docker image (AMD64)
+      - name: Build and push multi-architecture image
         uses: docker/build-push-action@v5
         with:
           context: .
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -103,39 +103,6 @@ jobs:
             BUILDTIME=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
             VERSION=${{ steps.meta.outputs.branch }}
             REVISION=${{ github.sha }}
-
-      - name: Build and push Docker image (ARM64)
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          platforms: linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}-arm64
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          build-args: |
-            BUILDTIME=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
-            VERSION=${{ steps.meta.outputs.branch }}
-            REVISION=${{ github.sha }}
-
-      - name: Create manifest list (Multi-arch)
-        run: |
-          # Only create manifest for main/develop branches to avoid too many manifests
-          if [[ "${{ github.head_ref || github.ref_name }}" == "main" ]] || [[ "${{ github.head_ref || github.ref_name }}" == "develop" ]]; then
-            TAGS="${{ steps.meta.outputs.tags }}"
-
-            # Create manifest list for each tag (combining AMD64 and ARM64)
-            for TAG in $(echo $TAGS | tr "," " "); do
-              if [[ ! "$TAG" =~ -arm64$ ]]; then  # Skip ARM64-specific tags
-                docker buildx imagetools create \
-                  --tag $TAG \
-                  ${TAG} \
-                  ${TAG}-arm64
-                echo "Created manifest list for: $TAG"
-              fi
-            done
-          fi
 
       - name: Summary
         run: |
