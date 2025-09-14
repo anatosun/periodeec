@@ -52,6 +52,7 @@ class Slskd(Downloader):
         # Session will be created when needed
         self._session: Optional[aiohttp.ClientSession] = None
         self._authenticated = False
+        self._last_search_time = 0  # Track last search time for rate limiting
         
     async def _get_session(self) -> aiohttp.ClientSession:
         """Get or create aiohttp session with proper headers."""
@@ -179,20 +180,49 @@ class Slskd(Downloader):
             return []
         
         session = await self._get_session()
-        
+
         try:
+            # Rate limiting - ensure minimum delay between searches to avoid conflicts
+            current_time = time.time()
+            min_search_interval = 1.0  # Minimum 1 second between searches
+
+            if current_time - self._last_search_time < min_search_interval:
+                wait_time = min_search_interval - (current_time - self._last_search_time)
+                self._logger.debug(f"Rate limiting: waiting {wait_time:.1f}s before search")
+                await asyncio.sleep(wait_time)
+
+            self._last_search_time = time.time()
+
             # URL encode the query
             encoded_query = quote(query)
-            
-            # Start search
-            async with session.post(f"{self.base_url}/searches", 
-                                  json={'searchText': query}) as resp:
-                if resp.status != 201:
-                    self._logger.error(f"Search initiation failed: {resp.status}")
-                    return []
-                
-                search_data = await resp.json()
-                search_id = search_data.get('id')
+
+            # Start search with retry logic for conflicts
+            search_id = None
+            max_retries = 3
+
+            for attempt in range(max_retries):
+                async with session.post(f"{self.base_url}/searches",
+                                      json={'searchText': query}) as resp:
+                    if resp.status == 201:
+                        search_data = await resp.json()
+                        search_id = search_data.get('id')
+                        break
+                    elif resp.status == 409:
+                        # Conflict - search already running or rate limited
+                        if attempt < max_retries - 1:
+                            wait_time = (attempt + 1) * 2  # 2, 4, 6 seconds
+                            self._logger.warning(f"Search conflict (409), retrying in {wait_time}s... (attempt {attempt + 1}/{max_retries})")
+                            await asyncio.sleep(wait_time)
+                            continue
+                        else:
+                            self._logger.error(f"Search initiation failed after {max_retries} attempts: 409 Conflict (too many concurrent searches or duplicate query)")
+                            return []
+                    else:
+                        self._logger.error(f"Search initiation failed: {resp.status}")
+                        if attempt < max_retries - 1:
+                            await asyncio.sleep(1)
+                            continue
+                        return []
             
             if not search_id:
                 self._logger.error("No search ID returned")
