@@ -9,6 +9,14 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
+class PlexOperationResult:
+    """Simple result class for compatibility with existing code."""
+
+    def __init__(self, success: bool, message: str = ""):
+        self.success = success
+        self.message = message
+
+
 class PlexHandler:
     def __init__(self, baseurl: str, token: str, section: str = "Music", m3u_path: str = "m3u",
                  verify_ssl: bool = True, timeout: int = 30, retry_attempts: int = 3):
@@ -100,17 +108,18 @@ class PlexHandler:
                     f"Error creating playlist {playlist.title} for '{username}': {e}")
                 return False
 
-    def create(self, playlist: Playlist, username="", collection: bool = False) -> bool:
+    def create(self, playlist: Playlist, username="", collection: bool = False, create_m3u: bool = True) -> PlexOperationResult:
         """Create or update a Plex playlist or collection."""
 
         if username == "" and not collection:
-            logger.error(
-                f"Failed to create playlist {playlist.title}, username not provided without 'collection' flag")
+            error_msg = f"Failed to create playlist {playlist.title}, username not provided without 'collection' flag"
+            logger.error(error_msg)
+            return PlexOperationResult(success=False, message=error_msg)
 
         if len(playlist.tracks) < 1:
-            logger.error(
-                f"Failed to create playlist {playlist.title}, no tracks provided")
-            return False
+            error_msg = f"Failed to create playlist {playlist.title}, no tracks provided"
+            logger.error(error_msg)
+            return PlexOperationResult(success=False, message=error_msg)
 
         m3u_file = self.create_m3u(playlist, username)
 
@@ -121,8 +130,38 @@ class PlexHandler:
             items = temp_playlist.items()
             temp_playlist.delete()
         except Exception as e:
-            logger.error(
-                f"Failed to create temporary playlist '{playlist.title}': {e}")
-            return False
+            error_msg = f"Failed to create temporary playlist '{playlist.title}': {e}"
+            logger.error(error_msg)
+            return PlexOperationResult(success=False, message=error_msg)
 
-        return self.create_collection(playlist, items) if collection else self.create_playlist(playlist, username, items)
+        success = self.create_collection(playlist, items) if collection else self.create_playlist(playlist, username, items)
+
+        if success:
+            return PlexOperationResult(
+                success=True,
+                message=f"{'Collection' if collection else 'Playlist'} '{playlist.title}' created successfully"
+            )
+        else:
+            return PlexOperationResult(
+                success=False,
+                message=f"Failed to create {'collection' if collection else 'playlist'} '{playlist.title}'"
+            )
+
+    def validate_connection(self) -> PlexOperationResult:
+        """Validate the Plex connection."""
+        try:
+            # Test basic server connection
+            server_info = self.plex_server.friendlyName
+
+            # Test section access
+            section = self.plex_server.library.section(self.section)
+
+            return PlexOperationResult(
+                success=True,
+                message=f"Connected to {server_info}, section: {section.title}"
+            )
+        except Exception as e:
+            return PlexOperationResult(
+                success=False,
+                message=f"Connection validation failed: {e}"
+            )
