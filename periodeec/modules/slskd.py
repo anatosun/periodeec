@@ -332,7 +332,7 @@ class Slskd(Downloader):
         query = " ".join(query_parts)
         
         if not query.strip():
-            return MatchResult(MatchQuality.NO_MATCH, error_message="No search terms provided")
+            return MatchResult(MatchQuality.NO_MATCH, metadata={"error_message": "No search terms provided"})
         
         self._logger.info(f"Searching Soulseek for: {query}")
         
@@ -341,7 +341,7 @@ class Slskd(Downloader):
         
         if not results:
             self._logger.warning(f"No results found for: {query}")
-            return MatchResult(MatchQuality.NO_MATCH, error_message="No search results")
+            return MatchResult(MatchQuality.NO_MATCH, metadata={"error_message": "No search results"})
         
         # Score and rank results
         scored_results = []
@@ -351,7 +351,7 @@ class Slskd(Downloader):
                 scored_results.append((score, quality, result))
         
         if not scored_results:
-            return MatchResult(MatchQuality.NO_MATCH, error_message="No suitable matches found")
+            return MatchResult(MatchQuality.NO_MATCH, metadata={"error_message": "No suitable matches found"})
         
         # Sort by score (descending)
         scored_results.sort(key=lambda x: x[0], reverse=True)
@@ -395,7 +395,7 @@ class Slskd(Downloader):
             return loop.run_until_complete(self._async_match(isrc, artist, title, album))
         except Exception as e:
             self._logger.error(f"Match operation failed: {e}")
-            return MatchResult(MatchQuality.NO_MATCH, error_message=str(e))
+            return MatchResult(MatchQuality.NO_MATCH, metadata={"error_message": str(e)})
     
     async def _async_download(self, username: str, filename: str, destination: str) -> bool:
         """Download a file from a Soulseek user."""
