@@ -1,3 +1,4 @@
+from typing import List
 from periodeec.schema import Track
 import logging
 import json
@@ -7,7 +8,7 @@ logger.setLevel(logging.INFO)
 
 
 class Playlist:
-    def __init__(self, title: str, tracks: list[Track], id: str, path: str, number_of_tracks=0, description: str = "", snapshot_id: str = "", poster: str = "", summary: str = "", url: str = ""):
+    def __init__(self, title: str, tracks: List[Track], id: str, path: str, number_of_tracks=0, description: str = "", snapshot_id: str = "", poster: str = "", summary: str = "", url: str = ""):
         """
         Represents a playlist.
         """
