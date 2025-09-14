@@ -30,24 +30,71 @@ class PlexHandler:
         return self.plex_server.switchUser(username) if username and username != self.admin_user else self.plex_server
 
     def sanitize_filename(self, name: str) -> str:
-        """Sanitize filenames by replacing invalid characters."""
-        return ''.join('_' if char in '<>:"/\\|?* &' else char for char in name)
+        """Sanitize filenames by replacing invalid characters and emojis."""
+        if not name:
+            return "Unknown"
+
+        # Replace problematic filesystem characters
+        invalid_chars = '<>:"/\\|?*&'
+        sanitized = ''.join('_' if char in invalid_chars else char for char in name)
+
+        # Remove or replace emoji and other non-ASCII characters that might cause issues
+        # Keep basic accented characters but replace complex unicode
+        result = ""
+        for char in sanitized:
+            if ord(char) < 128:  # Basic ASCII
+                result += char
+            elif ord(char) < 256:  # Extended ASCII (accented chars)
+                result += char
+            else:  # Replace complex unicode/emoji with underscore
+                result += "_"
+
+        # Clean up multiple underscores and trim
+        result = "_".join(part for part in result.split("_") if part.strip())
+
+        # Ensure reasonable length
+        if len(result) > 100:
+            result = result[:100]
+
+        return result or "Unknown"
 
     def create_m3u(self, playlist: Playlist, username: str) -> str:
         """Creates an M3U file for the given playlist and returns the file path."""
         username = self.sanitize_filename(username)
         title = self.sanitize_filename(playlist.title)
 
-        user_m3u_path = os.path.join(self.m3u_path, username)
-        os.makedirs(user_m3u_path, exist_ok=True)
+        # Create M3U files in a subdirectory of the music library so Plex can access them
+        # Try to use a playlists subdirectory in the music folder
+        try:
+            # Get the music library path from Plex
+            section = self.plex_server.library.section(self.section)
+            music_paths = [loc.path for loc in section.locations if hasattr(loc, 'path')]
 
-        m3u_file_path = os.path.join(user_m3u_path, f"{title}.m3u")
-        with open(m3u_file_path, "w") as m3u_file:
+            if music_paths:
+                # Use the first music library location and create a playlists subfolder
+                music_root = music_paths[0]
+                playlists_dir = os.path.join(music_root, "playlists", username)
+            else:
+                # Fallback to the configured m3u_path
+                playlists_dir = os.path.join(self.m3u_path, username)
+
+        except Exception as e:
+            logger.warning(f"Could not determine music library path, using fallback: {e}")
+            playlists_dir = os.path.join(self.m3u_path, username)
+
+        os.makedirs(playlists_dir, exist_ok=True)
+
+        m3u_file_path = os.path.join(playlists_dir, f"{title}.m3u")
+
+        # Write with explicit UTF-8 encoding to handle unicode characters properly
+        with open(m3u_file_path, "w", encoding="utf-8") as m3u_file:
             m3u_file.write("#EXTM3U\n")
             for track in playlist.tracks:
                 if track.path:
-                    m3u_file.write(
-                        f"#EXTINF:-1,{track.artist} - {track.title}\n")
+                    # Sanitize track info for M3U format
+                    artist = track.artist.replace('\n', ' ').replace('\r', ' ')
+                    title_clean = track.title.replace('\n', ' ').replace('\r', ' ')
+                    m3u_file.write(f"#EXTINF:-1,{artist} - {title_clean}\n")
                     m3u_file.write(f"{track.path}\n")
 
         logger.info(f"Created M3U file: {m3u_file_path}")
@@ -124,14 +171,32 @@ class PlexHandler:
         m3u_file = self.create_m3u(playlist, username)
 
         try:
+            # Use sanitized title for temporary playlist to avoid character issues
+            sanitized_title = self.sanitize_filename(playlist.title)
+            temp_playlist_name = f"{sanitized_title}_temp"
+
+            logger.info(f"Creating temporary playlist '{temp_playlist_name}' from M3U file: {m3u_file}")
             temp_playlist = self.plex_server.createPlaylist(
-                title=f"{playlist.title} (temp)", section=self.section, m3ufilepath=m3u_file
+                title=temp_playlist_name, section=self.section, m3ufilepath=m3u_file
             )
+
             items = temp_playlist.items()
+            logger.info(f"Temporary playlist created with {len(items)} items")
+
+            # Clean up the temporary playlist
             temp_playlist.delete()
+            logger.debug(f"Temporary playlist '{temp_playlist_name}' deleted")
+
         except Exception as e:
-            error_msg = f"Failed to create temporary playlist '{playlist.title}': {e}"
+            error_msg = f"Failed to create temporary playlist from M3U '{m3u_file}': {e}"
             logger.error(error_msg)
+
+            # Try to provide more specific error information
+            if "m3u" in str(e).lower():
+                error_msg += " - Check if M3U file is accessible by Plex and contains valid file paths"
+            elif "permission" in str(e).lower():
+                error_msg += " - Check if Plex has permission to read the M3U file"
+
             return PlexOperationResult(success=False, message=error_msg)
 
         success = self.create_collection(playlist, items) if collection else self.create_playlist(playlist, username, items)
