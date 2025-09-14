@@ -176,8 +176,14 @@ class PlexHandler:
             temp_playlist_name = f"{sanitized_title}_temp"
 
             logger.info(f"Creating temporary playlist '{temp_playlist_name}' from M3U file: {m3u_file}")
-            temp_playlist = self.plex_server.createPlaylist(
-                title=temp_playlist_name, section=self.section, m3ufilepath=m3u_file
+
+            # Ensure we're using the admin server instance for temporary playlist creation
+            # This is crucial because only the admin has access to the M3U files
+            admin_server = self.plex_server  # This should be the admin instance
+            temp_playlist = admin_server.createPlaylist(
+                title=temp_playlist_name,
+                section=self.section,
+                m3ufilepath=m3u_file
             )
 
             items = temp_playlist.items()
@@ -191,11 +197,28 @@ class PlexHandler:
             error_msg = f"Failed to create temporary playlist from M3U '{m3u_file}': {e}"
             logger.error(error_msg)
 
+            # Add debugging information
+            logger.error(f"M3U file exists: {os.path.exists(m3u_file)}")
+            if os.path.exists(m3u_file):
+                logger.error(f"M3U file size: {os.path.getsize(m3u_file)} bytes")
+                logger.error(f"M3U file readable: {os.access(m3u_file, os.R_OK)}")
+
             # Try to provide more specific error information
             if "m3u" in str(e).lower():
                 error_msg += " - Check if M3U file is accessible by Plex and contains valid file paths"
             elif "permission" in str(e).lower():
                 error_msg += " - Check if Plex has permission to read the M3U file"
+            elif "not found" in str(e).lower():
+                error_msg += " - M3U file or tracks within it cannot be found by Plex"
+
+            # Try to clean up the M3U file if it exists
+            try:
+                if os.path.exists(m3u_file):
+                    logger.debug(f"Cleaning up failed M3U file: {m3u_file}")
+                    # Don't delete it for debugging purposes
+                    # os.remove(m3u_file)
+            except Exception:
+                pass
 
             return PlexOperationResult(success=False, message=error_msg)
 
