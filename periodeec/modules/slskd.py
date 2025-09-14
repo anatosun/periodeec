@@ -318,22 +318,41 @@ class Slskd(Downloader):
                 if len(part) > 2
             ] + [0.0])
         
-        # Calculate combined text score
-        if album:
-            text_score = (artist_score + title_score + album_score) / 3
+        # Calculate combined text score with album priority (since we're doing album-based matching)
+        if album and artist:
+            # For album-based searches, prioritize album and artist matches over individual track
+            text_score = (album_score * 0.5) + (artist_score * 0.4) + (title_score * 0.1)
+        elif album:
+            # Album-only search
+            text_score = album_score
         else:
+            # Fallback to track-based scoring
             text_score = (artist_score + title_score) / 2
         
         # Quality bonus
         quality_bonus = audio_info['quality_score'] / 100.0 * 0.2
-        
+
+        # Album structure bonus (favor results that look like album downloads)
+        album_structure_bonus = 0.0
+        path = result.get('path', '').lower()
+        if album and artist:
+            # Check if the path contains album-like structure (Artist/Album/ or Album/ patterns)
+            if any(pattern in path for pattern in [
+                f"{artist.lower()}/{album.lower()}",
+                f"{album.lower()}/",
+                f"/{album.lower()}/",
+                f"[{album.lower()}]",
+                f"({album.lower()})"
+            ]):
+                album_structure_bonus = 0.15
+
         # Speed bonus (prefer faster sources)
         speed_bonus = min(result.get('speed', 0) / 1000000, 0.1)  # Max 0.1 bonus
-        
+
         # Queue penalty (prefer sources with shorter queues)
         queue_penalty = min(result.get('queue_length', 0) * 0.01, 0.2)
         
-        total_score = text_score + quality_bonus + speed_bonus - queue_penalty
+        total_score = text_score + quality_bonus + album_structure_bonus + speed_bonus - queue_penalty
         
         # Determine quality level
         quality = MatchQuality.NO_MATCH
@@ -350,21 +369,39 @@ class Slskd(Downloader):
     
     async def _async_match(self, isrc: str, artist: str, title: str, album: str = "") -> MatchResult:
         """Async version of match method."""
-        # Build search query
+        # Build album-focused search query since we're matching with beets
+        # Priority: Album + Artist (better for beets album matching)
         query_parts = []
-        if artist:
+
+        if album and artist:
+            # Primary strategy: search for the album by the artist
             query_parts.append(f'"{artist}"')
-        if title:
-            query_parts.append(f'"{title}"')
-        if album:
             query_parts.append(f'"{album}"')
-        
+            # Add file type hints to improve results
+            query_parts.append("(flac OR mp3 OR m4a)")
+        elif artist and title:
+            # Fallback: individual track search if no album info
+            query_parts.append(f'"{artist}"')
+            query_parts.append(f'"{title}"')
+        elif album:
+            # Album only
+            query_parts.append(f'"{album}"')
+        elif artist:
+            # Artist only
+            query_parts.append(f'"{artist}"')
+        elif title:
+            # Title only (last resort)
+            query_parts.append(f'"{title}"')
+
         query = " ".join(query_parts)
         
         if not query.strip():
             return MatchResult(MatchQuality.NO_MATCH, metadata={"error_message": "No search terms provided"})
         
-        self._logger.info(f"Searching Soulseek for: {query}")
+        if album and artist:
+            self._logger.info(f"Searching Soulseek for album: {artist} - {album}")
+        else:
+            self._logger.info(f"Searching Soulseek for track: {query}")
         
         # Search for results
         results = await self._search(query)
