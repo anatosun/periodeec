@@ -258,8 +258,21 @@ class BeetsHandler:
         
         def prettify_candidate(self, candidate):
             """Format candidate information for logging."""
-            info = candidate.info
-            return f"{info.artist} - {info.album} ({info.year})"
+            try:
+                # Handle different candidate types (beets version compatibility)
+                if hasattr(candidate, 'info'):
+                    info = candidate.info
+                    return f"{info.artist} - {info.album} ({info.year})"
+                elif hasattr(candidate, 'artist') and hasattr(candidate, 'album'):
+                    # Direct access for newer beets versions
+                    return f"{candidate.artist} - {candidate.album} ({getattr(candidate, 'year', 'Unknown')})"
+                elif isinstance(candidate, str):
+                    return candidate
+                else:
+                    return str(candidate)
+            except Exception as e:
+                logger.debug(f"Error formatting candidate: {e}")
+                return str(candidate)
         
         def should_resume(self, path):
             """Don't resume interrupted imports."""
