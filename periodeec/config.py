@@ -1,61 +1,941 @@
+import os
 import yaml
+import logging
+from typing import Dict, Any, List, Optional, Union
+from dataclasses import dataclass, field
+from pathlib import Path
+import jsonschema
+from jsonschema import validate
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class SpotifyConfig:
+    """Spotify service configuration."""
+    client_id: str = ""
+    client_secret: str = ""
+    anonymous: bool = False
+    cache_enabled: bool = True
+    cache_ttl_hours: int = 24
+    rate_limit_rpm: int = 100
+    retry_attempts: int = 3
+    request_timeout: int = 30
+    include_collaborative: bool = True
+    include_followed: bool = False
+
+
+@dataclass
+class PlexConfig:
+    """Plex service configuration."""
+    baseurl: str = ""
+    token: str = ""
+    section: str = "Music"
+    verify_ssl: bool = True
+    timeout: int = 30
+    retry_attempts: int = 3
+
+
+@dataclass
+class BeetsConfig:
+    """Beets configuration."""
+    library: str = "./library.db"
+    directory: str = "./music"
+    plugins: List[str] = field(default_factory=lambda: ["spotify", "plexupdate"])
+    fuzzy: bool = False
+    auto_import: bool = True
+    strong_rec_thresh: float = 0.15
+    timid: bool = False
+    duplicate_action: str = "skip"  # skip, keep, remove
+
+
+@dataclass
+class DownloaderConfig:
+    """Base downloader configuration."""
+    name: str = ""
+    priority: int = 50
+    timeout: int = 300
+    enabled: bool = True
+
+
+@dataclass
+class QobuzConfig(DownloaderConfig):
+    """Qobuz downloader configuration."""
+    name: str = "qobuz"
+    email: str = ""
+    password: str = ""
+    quality: int = 27  # 27=Hi-Res, 7=Lossless, 6=CD, 5=MP3 320
+    embed_art: bool = True
+    cover_og_quality: bool = False
+    priority: int = 10
+
+
+@dataclass
+class SlskdConfig(DownloaderConfig):
+    """Soulseek (slskd) downloader configuration."""
+    name: str = "slskd"
+    host: str = "localhost"
+    port: int = 5030
+    api_key: str = ""
+    username: str = ""
+    password: str = ""
+    use_https: bool = False
+    max_results: int = 100
+    min_bitrate: int = 320
+    preferred_formats: List[str] = field(default_factory=lambda: ['flac', 'alac', 'mp3', 'm4a'])
+    priority: int = 30
+
+
+@dataclass
+class PathConfig:
+    """File path configuration."""
+    config: str = "./config"
+    downloads: str = "./downloads"
+    failed: str = "./failed"
+    playlists: str = "./playlists"
+    m3u: str = "./m3u"
+    cache: str = "./cache"
+
+
+@dataclass
+class PlaylistConfig:
+    """Individual playlist configuration."""
+    url: str = ""
+    title: Optional[str] = None
+    sync_mode: str = "playlist"  # playlist, collection, both
+    sync_to_plex_users: List[str] = field(default_factory=list)
+    download_missing: bool = True
+    create_m3u: bool = True
+    summary: Optional[str] = None
+    poster: Optional[str] = None
+    schedule_minutes: int = 1440  # 24 hours
+    enabled: bool = True
+    overwrite: bool = True
+
+
+@dataclass
+class CollectionConfig:
+    """Collection configuration."""
+    url: str = ""
+    title: Optional[str] = None
+    download_missing: bool = True
+    summary: Optional[str] = None
+    poster: Optional[str] = None
+    schedule_minutes: int = 1440
+    enabled: bool = True
+    overwrite: bool = True
+
+
+@dataclass
+class UserConfig:
+    """User sync configuration."""
+    spotify_username: str = ""
+    sync_to_plex_users: List[str] = field(default_factory=list)
+    download_missing: bool = True
+    create_m3u: bool = True
+    include_collaborative: bool = True
+    include_followed: bool = False
+    schedule_minutes: int = 1440
+    enabled: bool = True
+    overwrite: bool = True
+
+
+@dataclass
+class LoggingConfig:
+    """Logging configuration."""
+    level: str = "INFO"
+    format: str = "%(asctime)s - %(levelname)s - %(name)s - %(message)s"
+    file: Optional[str] = None
+    max_size_mb: int = 100
+    backup_count: int = 5
+    console: bool = True
+    color: bool = True
+
+
+@dataclass
+class AdvancedConfig:
+    """Advanced configuration options."""
+    enable_statistics: bool = True
+    statistics_file: Optional[str] = "stats.json"
+    enable_caching: bool = True
+    cache_cleanup_days: int = 30
+    max_concurrent_downloads: int = 3
+    rate_limit_buffer: float = 1.2  # Multiply rate limits by this factor for safety
+    retry_failed_after_hours: int = 24
+    health_check_interval_minutes: int = 60
+
+
+class ConfigurationError(Exception):
+    """Configuration-related error."""
+    pass
 
 
 class Config:
-    def __init__(self, settings, playlists=None, collections=None, usernames=None):
-        self.playlists = playlists
-        self.collections = collections
-        self.usernames = usernames
-        self.settings = settings
+    """Configuration system with validation and schema support."""
+    
+    # Configuration schema for validation
+    CONFIG_SCHEMA = {
+        "type": "object",
+        "properties": {
+            "spotify": {
+                "type": "object",
+                "properties": {
+                    "client_id": {"type": "string"},
+                    "client_secret": {"type": "string"},
+                    "anonymous": {"type": "boolean"}
+                }
+            },
+            "plex": {
+                "type": "object",
+                "required": ["baseurl", "token"],
+                "properties": {
+                    "baseurl": {"type": "string", "format": "uri"},
+                    "token": {"type": "string", "minLength": 1},
+                    "section": {"type": "string"}
+                }
+            },
+            "beets": {
+                "type": "object",
+                "properties": {
+                    "library": {"type": "string"},
+                    "directory": {"type": "string"},
+                    "plugins": {
+                        "type": "array",
+                        "items": {"type": "string"}
+                    }
+                }
+            },
+            "downloaders": {
+                "type": "object",
+                "properties": {
+                    "qobuz": {
+                        "type": "object",
+                        "properties": {
+                            "email": {"type": "string", "format": "email"},
+                            "password": {"type": "string"},
+                            "quality": {"type": "integer", "minimum": 5, "maximum": 27}
+                        }
+                    },
+                    "slskd": {
+                        "type": "object",
+                        "properties": {
+                            "host": {"type": "string"},
+                            "port": {"type": "integer", "minimum": 1, "maximum": 65535}
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    def __init__(self, config_path: str = "config/config.yaml"):
+        """
+        Initialize configuration from file.
+        
+        Args:
+            config_path: Path to the configuration YAML file
+        """
+        self.config_path = Path(config_path)
+        self.config_dir = self.config_path.parent
+        
+        # Default configurations
+        self.spotify = SpotifyConfig()
+        self.plex = PlexConfig()
+        self.beets = BeetsConfig()
+        self.paths = PathConfig()
+        self.logging = LoggingConfig()
+        self.advanced = AdvancedConfig()
+        
+        # Collections
+        self.downloaders: Dict[str, Union[QobuzConfig, SlskdConfig]] = {}
+        self.playlists: Dict[str, PlaylistConfig] = {}
+        self.collections: Dict[str, CollectionConfig] = {}
+        self.users: Dict[str, UserConfig] = {}
+        
+        # Load configuration
+        if self.config_path.exists():
+            self.load_config()
+        else:
+            logger.warning(f"Configuration file not found: {config_path}")
+            self.create_default_config()
+    
+    def load_config(self):
+        """Load configuration from YAML file."""
+        try:
+            with open(self.config_path, 'r', encoding='utf-8') as f:
+                config_data = yaml.safe_load(f)
+            
+            if not config_data:
+                raise ConfigurationError("Configuration file is empty")
+            
+            # Validate against schema
+            self._validate_config(config_data)
+            
+            # Load main configurations
+            self._load_spotify_config(config_data.get('spotify', {}))
+            self._load_plex_config(config_data.get('plex', {}))
+            self._load_beets_config(config_data.get('beets', {}))
+            self._load_paths_config(config_data.get('paths', {}))
+            self._load_logging_config(config_data.get('logging', {}))
+            self._load_advanced_config(config_data.get('advanced', {}))
+            
+            # Load downloader configurations
+            self._load_downloader_configs(config_data.get('downloaders', {}))
+            
+            # Load playlist/collection/user configurations
+            self._load_playlists_config(config_data.get('playlists', {}))
+            self._load_collections_config(config_data.get('collections', {}))
+            self._load_users_config(config_data.get('users', {}))
+            
+            # Resolve relative paths
+            self._resolve_paths()
+            
+            logger.info(f"Configuration loaded successfully from {self.config_path}")
+            
+        except Exception as e:
+            raise ConfigurationError(f"Failed to load configuration: {e}")
+    
+    def _validate_config(self, config_data: Dict[str, Any]):
+        """Validate configuration against schema."""
+        try:
+            # Note: This is a simplified validation
+            # In practice, you'd want more comprehensive schema validation
+            required_sections = ['plex']
+            
+            for section in required_sections:
+                if section not in config_data:
+                    raise ConfigurationError(f"Required configuration section missing: {section}")
+            
+            # Validate Plex configuration
+            plex_config = config_data.get('plex', {})
+            if not plex_config.get('baseurl') or not plex_config.get('token'):
+                raise ConfigurationError("Plex baseurl and token are required")
+            
+        except jsonschema.ValidationError as e:
+            raise ConfigurationError(f"Configuration validation failed: {e.message}")
+    
+    def _load_spotify_config(self, config: Dict[str, Any]):
+        """Load Spotify configuration."""
+        self.spotify = SpotifyConfig(**config)
+    
+    def _load_plex_config(self, config: Dict[str, Any]):
+        """Load Plex configuration."""
+        self.plex = PlexConfig(**config)
+    
+    def _load_beets_config(self, config: Dict[str, Any]):
+        """Load Beets configuration."""
+        self.beets = BeetsConfig(**config)
+    
+    def _load_paths_config(self, config: Dict[str, Any]):
+        """Load path configuration."""
+        self.paths = PathConfig(**config)
+    
+    def _load_logging_config(self, config: Dict[str, Any]):
+        """Load logging configuration."""
+        self.logging = LoggingConfig(**config)
+    
+    def _load_advanced_config(self, config: Dict[str, Any]):
+        """Load advanced configuration."""
+        self.advanced = AdvancedConfig(**config)
+    
+    def _load_downloader_configs(self, config: Dict[str, Any]):
+        """Load downloader configurations."""
+        for name, downloader_config in config.items():
+            if not downloader_config.get('enabled', True):
+                continue
+            
+            if name == 'qobuz':
+                self.downloaders[name] = QobuzConfig(**downloader_config)
+            elif name == 'slskd':
+                self.downloaders[name] = SlskdConfig(**downloader_config)
+            else:
+                logger.warning(f"Unknown downloader type: {name}")
+    
+    def _load_playlists_config(self, config: Dict[str, Any]):
+        """Load playlist configurations."""
+        for name, playlist_config in config.items():
+            if playlist_config.get('enabled', True):
+                self.playlists[name] = PlaylistConfig(**playlist_config)
+    
+    def _load_collections_config(self, config: Dict[str, Any]):
+        """Load collection configurations."""
+        for name, collection_config in config.items():
+            if collection_config.get('enabled', True):
+                self.collections[name] = CollectionConfig(**collection_config)
+    
+    def _load_users_config(self, config: Dict[str, Any]):
+        """Load user configurations."""
+        for name, user_config in config.items():
+            if user_config.get('enabled', True):
+                self.users[name] = UserConfig(**user_config)
+    
+    def _resolve_paths(self):
+        """Resolve relative paths to absolute paths."""
+        base_path = self.config_dir
+        
+        # Resolve path configurations
+        for attr in ['config', 'downloads', 'failed', 'playlists', 'm3u', 'cache']:
+            current_path = getattr(self.paths, attr)
+            if not os.path.isabs(current_path):
+                resolved_path = os.path.abspath(os.path.join(base_path, current_path))
+                setattr(self.paths, attr, resolved_path)
+        
+        # Resolve beets paths
+        if not os.path.isabs(self.beets.library):
+            self.beets.library = os.path.abspath(os.path.join(base_path, self.beets.library))
+        
+        if not os.path.isabs(self.beets.directory):
+            self.beets.directory = os.path.abspath(os.path.join(base_path, self.beets.directory))
+        
+        # Resolve logging file path if specified
+        if self.logging.file and not os.path.isabs(self.logging.file):
+            self.logging.file = os.path.abspath(os.path.join(base_path, self.logging.file))
+        
+        # Resolve statistics file path if specified
+        if self.advanced.statistics_file and not os.path.isabs(self.advanced.statistics_file):
+            self.advanced.statistics_file = os.path.abspath(
+                os.path.join(base_path, self.advanced.statistics_file)
+            )
+    
+    def create_default_config(self):
+        """Create a default configuration file."""
+        default_config = {
+            'spotify': {
+                'client_id': '',
+                'client_secret': '',
+                'anonymous': True,
+                'cache_enabled': True,
+                'cache_ttl_hours': 24,
+                'rate_limit_rpm': 100
+            },
+            'plex': {
+                'baseurl': 'http://localhost:32400',
+                'token': '',
+                'section': 'Music',
+                'verify_ssl': True,
+                'timeout': 30
+            },
+            'beets': {
+                'library': './music/library.db',
+                'directory': './music',
+                'plugins': ['spotify', 'plexupdate'],
+                'fuzzy': False,
+                'auto_import': True,
+                'strong_rec_thresh': 0.15
+            },
+            'paths': {
+                'config': './config',
+                'downloads': './downloads',
+                'failed': './failed',
+                'playlists': './playlists',
+                'm3u': './m3u',
+                'cache': './cache'
+            },
+            'downloaders': {
+                'qobuz': {
+                    'enabled': False,
+                    'email': '',
+                    'password': '',
+                    'quality': 27,
+                    'priority': 10
+                },
+                'slskd': {
+                    'enabled': False,
+                    'host': 'localhost',
+                    'port': 5030,
+                    'api_key': '',
+                    'priority': 30
+                }
+            },
+            'logging': {
+                'level': 'INFO',
+                'console': True,
+                'color': True,
+                'file': None
+            },
+            'advanced': {
+                'enable_statistics': True,
+                'enable_caching': True,
+                'max_concurrent_downloads': 3,
+                'retry_failed_after_hours': 24
+            },
+            'playlists': {},
+            'collections': {},
+            'users': {}
+        }
+        
+        # Create config directory
+        self.config_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Write default config
+        with open(self.config_path, 'w', encoding='utf-8') as f:
+            yaml.dump(default_config, f, default_flow_style=False, indent=2)
+        
+        logger.info(f"Created default configuration at {self.config_path}")
+    
+    def create_directories(self):
+        """Create necessary directories."""
+        directories = [
+            self.paths.config,
+            self.paths.downloads,
+            self.paths.failed,
+            self.paths.playlists,
+            self.paths.m3u,
+            self.paths.cache,
+            os.path.dirname(self.beets.library),
+            self.beets.directory
+        ]
+        
+        for directory in directories:
+            if directory:
+                Path(directory).mkdir(parents=True, exist_ok=True)
+                logger.debug(f"Created directory: {directory}")
+    
+    def validate_configuration(self) -> List[str]:
+        """
+        Validate the loaded configuration and return list of issues.
+        
+        Returns:
+            List of validation error messages
+        """
+        issues = []
+        
+        # Validate Plex configuration
+        if not self.plex.baseurl:
+            issues.append("Plex baseurl is required")
+        if not self.plex.token:
+            issues.append("Plex token is required")
+        
+        # Validate Spotify configuration (if not anonymous)
+        if not self.spotify.anonymous:
+            if not self.spotify.client_id:
+                issues.append("Spotify client_id is required when not using anonymous mode")
+            if not self.spotify.client_secret:
+                issues.append("Spotify client_secret is required when not using anonymous mode")
+        
+        # Validate downloader configurations
+        for name, downloader in self.downloaders.items():
+            if isinstance(downloader, QobuzConfig):
+                if not downloader.email or not downloader.password:
+                    issues.append(f"Qobuz email and password are required")
+            elif isinstance(downloader, SlskdConfig):
+                if not downloader.api_key and not (downloader.username and downloader.password):
+                    issues.append(f"Slskd requires either api_key or username/password")
+        
+        # Validate paths exist or can be created
+        critical_paths = [
+            (self.beets.directory, "Beets music directory"),
+            (os.path.dirname(self.beets.library), "Beets library directory")
+        ]
+        
+        for path, description in critical_paths:
+            try:
+                Path(path).mkdir(parents=True, exist_ok=True)
+            except Exception as e:
+                issues.append(f"Cannot create {description} at {path}: {e}")
+        
+        # Validate playlist/collection/user configurations
+        for name, playlist in self.playlists.items():
+            if not playlist.url:
+                issues.append(f"Playlist '{name}' missing URL")
+        
+        for name, collection in self.collections.items():
+            if not collection.url:
+                issues.append(f"Collection '{name}' missing URL")
+        
+        for name, user in self.users.items():
+            if not user.spotify_username:
+                issues.append(f"User '{name}' missing spotify_username")
+        
+        return issues
+    
+    def get_enabled_downloaders(self) -> Dict[str, Union[QobuzConfig, SlskdConfig]]:
+        """Get only enabled downloader configurations."""
+        return {name: config for name, config in self.downloaders.items() if config.enabled}
+    
+    def get_enabled_playlists(self) -> Dict[str, PlaylistConfig]:
+        """Get only enabled playlist configurations."""
+        return {name: config for name, config in self.playlists.items() if config.enabled}
+    
+    def get_enabled_collections(self) -> Dict[str, CollectionConfig]:
+        """Get only enabled collection configurations."""
+        return {name: config for name, config in self.collections.items() if config.enabled}
+    
+    def get_enabled_users(self) -> Dict[str, UserConfig]:
+        """Get only enabled user configurations."""
+        return {name: config for name, config in self.users.items() if config.enabled}
+    
+    def save_config(self):
+        """Save current configuration to file."""
+        try:
+            config_data = {
+                'spotify': {
+                    'client_id': self.spotify.client_id,
+                    'client_secret': self.spotify.client_secret,
+                    'anonymous': self.spotify.anonymous,
+                    'cache_enabled': self.spotify.cache_enabled,
+                    'cache_ttl_hours': self.spotify.cache_ttl_hours,
+                    'rate_limit_rpm': self.spotify.rate_limit_rpm,
+                    'retry_attempts': self.spotify.retry_attempts,
+                    'request_timeout': self.spotify.request_timeout
+                },
+                'plex': {
+                    'baseurl': self.plex.baseurl,
+                    'token': self.plex.token,
+                    'section': self.plex.section,
+                    'verify_ssl': self.plex.verify_ssl,
+                    'timeout': self.plex.timeout,
+                    'retry_attempts': self.plex.retry_attempts
+                },
+                'beets': {
+                    'library': self.beets.library,
+                    'directory': self.beets.directory,
+                    'plugins': self.beets.plugins,
+                    'fuzzy': self.beets.fuzzy,
+                    'auto_import': self.beets.auto_import,
+                    'strong_rec_thresh': self.beets.strong_rec_thresh,
+                    'timid': self.beets.timid,
+                    'duplicate_action': self.beets.duplicate_action
+                },
+                'paths': {
+                    'config': self.paths.config,
+                    'downloads': self.paths.downloads,
+                    'failed': self.paths.failed,
+                    'playlists': self.paths.playlists,
+                    'm3u': self.paths.m3u,
+                    'cache': self.paths.cache
+                },
+                'logging': {
+                    'level': self.logging.level,
+                    'format': self.logging.format,
+                    'file': self.logging.file,
+                    'max_size_mb': self.logging.max_size_mb,
+                    'backup_count': self.logging.backup_count,
+                    'console': self.logging.console,
+                    'color': self.logging.color
+                },
+                'advanced': {
+                    'enable_statistics': self.advanced.enable_statistics,
+                    'statistics_file': self.advanced.statistics_file,
+                    'enable_caching': self.advanced.enable_caching,
+                    'cache_cleanup_days': self.advanced.cache_cleanup_days,
+                    'max_concurrent_downloads': self.advanced.max_concurrent_downloads,
+                    'rate_limit_buffer': self.advanced.rate_limit_buffer,
+                    'retry_failed_after_hours': self.advanced.retry_failed_after_hours
+                }
+            }
+            
+            # Add downloader configurations
+            downloaders_data = {}
+            for name, downloader in self.downloaders.items():
+                if isinstance(downloader, QobuzConfig):
+                    downloaders_data[name] = {
+                        'enabled': downloader.enabled,
+                        'email': downloader.email,
+                        'password': downloader.password,
+                        'quality': downloader.quality,
+                        'embed_art': downloader.embed_art,
+                        'cover_og_quality': downloader.cover_og_quality,
+                        'priority': downloader.priority,
+                        'timeout': downloader.timeout
+                    }
+                elif isinstance(downloader, SlskdConfig):
+                    downloaders_data[name] = {
+                        'enabled': downloader.enabled,
+                        'host': downloader.host,
+                        'port': downloader.port,
+                        'api_key': downloader.api_key,
+                        'username': downloader.username,
+                        'password': downloader.password,
+                        'use_https': downloader.use_https,
+                        'max_results': downloader.max_results,
+                        'min_bitrate': downloader.min_bitrate,
+                        'preferred_formats': downloader.preferred_formats,
+                        'priority': downloader.priority,
+                        'timeout': downloader.timeout
+                    }
+            config_data['downloaders'] = downloaders_data
+            
+            # Add playlist/collection/user configurations
+            config_data['playlists'] = {
+                name: {
+                    'url': playlist.url,
+                    'title': playlist.title,
+                    'sync_mode': playlist.sync_mode,
+                    'sync_to_plex_users': playlist.sync_to_plex_users,
+                    'download_missing': playlist.download_missing,
+                    'create_m3u': playlist.create_m3u,
+                    'summary': playlist.summary,
+                    'poster': playlist.poster,
+                    'schedule_minutes': playlist.schedule_minutes,
+                    'enabled': playlist.enabled,
+                    'overwrite': playlist.overwrite
+                }
+                for name, playlist in self.playlists.items()
+            }
+            
+            config_data['collections'] = {
+                name: {
+                    'url': collection.url,
+                    'title': collection.title,
+                    'download_missing': collection.download_missing,
+                    'summary': collection.summary,
+                    'poster': collection.poster,
+                    'schedule_minutes': collection.schedule_minutes,
+                    'enabled': collection.enabled,
+                    'overwrite': collection.overwrite
+                }
+                for name, collection in self.collections.items()
+            }
+            
+            config_data['users'] = {
+                name: {
+                    'spotify_username': user.spotify_username,
+                    'sync_to_plex_users': user.sync_to_plex_users,
+                    'download_missing': user.download_missing,
+                    'create_m3u': user.create_m3u,
+                    'include_collaborative': user.include_collaborative,
+                    'include_followed': user.include_followed,
+                    'schedule_minutes': user.schedule_minutes,
+                    'enabled': user.enabled,
+                    'overwrite': user.overwrite
+                }
+                for name, user in self.users.items()
+            }
+            
+            # Write configuration
+            with open(self.config_path, 'w', encoding='utf-8') as f:
+                yaml.dump(config_data, f, default_flow_style=False, indent=2)
+            
+            logger.info(f"Configuration saved to {self.config_path}")
+            
+        except Exception as e:
+            raise ConfigurationError(f"Failed to save configuration: {e}")
+    
+    def print_summary(self):
+        """Print a summary of the current configuration."""
+        print("\n=== Configuration Summary ===")
+        print(f"Config file: {self.config_path}")
+        print(f"Spotify: {'Anonymous' if self.spotify.anonymous else 'Authenticated'}")
+        print(f"Plex: {self.plex.baseurl} (section: {self.plex.section})")
+        print(f"Beets library: {self.beets.library}")
+        print(f"Music directory: {self.beets.directory}")
+        
+        print(f"\nDownloaders ({len(self.get_enabled_downloaders())} enabled):")
+        for name, downloader in self.get_enabled_downloaders().items():
+            print(f"  - {name} (priority: {downloader.priority})")
+        
+        print(f"\nPlaylists: {len(self.get_enabled_playlists())} enabled")
+        print(f"Collections: {len(self.get_enabled_collections())} enabled")
+        print(f"Users: {len(self.get_enabled_users())} enabled")
+        
+        print(f"\nAdvanced:")
+        print(f"  - Statistics: {'Enabled' if self.advanced.enable_statistics else 'Disabled'}")
+        print(f"  - Caching: {'Enabled' if self.advanced.enable_caching else 'Disabled'}")
+        print(f"  - Max concurrent downloads: {self.advanced.max_concurrent_downloads}")
+        print("=" * 30)
 
 
-class Playlist:
-    def __init__(self, url, sync_mode=None, title=None, sync_to_plex_users=[], summary=None, poster=None, download_missing=False, schedule=1440):
-        self.url = url
-        self.sync_mode = sync_mode
-        self.title = title
-        self.sync_to_plex_users = sync_to_plex_users
-        self.summary = summary
-        self.poster = poster
-        self.download_missing = download_missing
-        self.schedule = int(schedule)
+def load_config(config_path: str = "config/config.yaml") -> Config:
+    """
+    Load configuration from file with error handling.
+    
+    Args:
+        config_path: Path to configuration file
+        
+    Returns:
+        Config instance
+        
+    Raises:
+        ConfigurationError: If configuration cannot be loaded or is invalid
+    """
+    try:
+        config = Config(config_path)
+        
+        # Validate configuration
+        issues = config.validate_configuration()
+        if issues:
+            error_msg = "Configuration validation failed:\n" + "\n".join(f"  - {issue}" for issue in issues)
+            raise ConfigurationError(error_msg)
+        
+        # Create necessary directories
+        config.create_directories()
+        
+        return config
+        
+    except Exception as e:
+        if isinstance(e, ConfigurationError):
+            raise
+        else:
+            raise ConfigurationError(f"Failed to load configuration: {e}")
 
 
-class Collection:
-    def __init__(self, url, sync_mode=None, title=None, summary=None, poster=None, download_missing=False, schedule=1440):
-        self.url = url
-        self.sync_mode = sync_mode
-        self.title = title
-        self.summary = summary
-        self.poster = poster
-        self.download_missing = bool(download_missing)
-        self.schedule = int(schedule)
+def create_example_config(output_path: str = "config/example-config.yaml"):
+    """Create an example configuration file with documentation."""
+    example_config = {
+        '# Periodeec Configuration File': None,
+        '# This file contains all configuration options for the periodeec music sync tool': None,
+        '': None,
+        
+        'spotify': {
+            '# Spotify API credentials (get from https://developer.spotify.com)': None,
+            'client_id': 'your_spotify_client_id',
+            'client_secret': 'your_spotify_client_secret',
+            '# Use anonymous mode (requires spotipy_anon package)': None,
+            'anonymous': False,
+            '# Cache settings': None,
+            'cache_enabled': True,
+            'cache_ttl_hours': 24,
+            '# Rate limiting (requests per minute)': None,
+            'rate_limit_rpm': 100,
+            'retry_attempts': 3,
+            'request_timeout': 30
+        },
+        
+        'plex': {
+            '# Plex server configuration': None,
+            'baseurl': 'http://localhost:32400',
+            'token': 'your_plex_token',
+            'section': 'Music',
+            'verify_ssl': True,
+            'timeout': 30,
+            'retry_attempts': 3
+        },
+        
+        'beets': {
+            '# Beets music library configuration': None,
+            'library': './music/library.db',
+            'directory': './music',
+            'plugins': ['spotify', 'plexupdate'],
+            'fuzzy': False,
+            'auto_import': True,
+            'strong_rec_thresh': 0.15,
+            'timid': False,
+            'duplicate_action': 'skip'  # skip, keep, remove
+        },
+        
+        'paths': {
+            '# Directory paths (relative to config file)': None,
+            'config': './config',
+            'downloads': './downloads',
+            'failed': './failed',
+            'playlists': './playlists',
+            'm3u': './m3u',
+            'cache': './cache'
+        },
+        
+        'downloaders': {
+            'qobuz': {
+                'enabled': False,
+                'email': 'your_qobuz_email',
+                'password': 'your_qobuz_password',
+                'quality': 27,  # 27=Hi-Res, 7=Lossless, 6=CD, 5=MP3 320
+                'embed_art': True,
+                'cover_og_quality': False,
+                'priority': 10,
+                'timeout': 300
+            },
+            'slskd': {
+                'enabled': False,
+                'host': 'localhost',
+                'port': 5030,
+                'api_key': 'your_slskd_api_key',
+                'username': '',  # Alternative to api_key
+                'password': '',  # Alternative to api_key
+                'use_https': False,
+                'max_results': 100,
+                'min_bitrate': 320,
+                'preferred_formats': ['flac', 'alac', 'mp3', 'm4a'],
+                'priority': 30,
+                'timeout': 600
+            }
+        },
+        
+        'logging': {
+            'level': 'INFO',  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+            'console': True,
+            'color': True,
+            'file': None,  # Optional log file path
+            'max_size_mb': 100,
+            'backup_count': 5
+        },
+        
+        'advanced': {
+            'enable_statistics': True,
+            'statistics_file': 'stats.json',
+            'enable_caching': True,
+            'cache_cleanup_days': 30,
+            'max_concurrent_downloads': 3,
+            'rate_limit_buffer': 1.2,
+            'retry_failed_after_hours': 24,
+            'health_check_interval_minutes': 60
+        },
+        
+        '# Playlist configurations': None,
+        'playlists': {
+            'example_playlist': {
+                'url': 'https://open.spotify.com/playlist/your_playlist_id',
+                'title': None,  # Override playlist title
+                'sync_mode': 'playlist',  # playlist, collection, both
+                'sync_to_plex_users': ['username1', 'username2'],
+                'download_missing': True,
+                'create_m3u': True,
+                'summary': None,  # Override description
+                'poster': None,  # Override poster URL
+                'schedule_minutes': 1440,  # Check every 24 hours
+                'enabled': True,
+                'overwrite': True
+            }
+        },
+        
+        '# Collection configurations': None,
+        'collections': {
+            'example_collection': {
+                'url': 'https://open.spotify.com/playlist/your_playlist_id',
+                'title': None,
+                'download_missing': True,
+                'summary': None,
+                'poster': None,
+                'schedule_minutes': 1440,
+                'enabled': True,
+                'overwrite': True
+            }
+        },
+        
+        '# User sync configurations': None,
+        'users': {
+            'example_user': {
+                'spotify_username': 'spotify_username',
+                'sync_to_plex_users': ['plex_username'],
+                'download_missing': True,
+                'create_m3u': True,
+                'include_collaborative': True,
+                'include_followed': False,
+                'schedule_minutes': 1440,
+                'enabled': True,
+                'overwrite': True
+            }
+        }
+    }
+    
+    # Create output directory
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    
+    # Write example config (filtering out comment keys)
+    clean_config = {k: v for k, v in example_config.items() if not k.startswith('#') and k != ''}
+    
+    with open(output_path, 'w', encoding='utf-8') as f:
+        yaml.dump(clean_config, f, default_flow_style=False, indent=2)
+    
+    logger.info(f"Example configuration created at {output_path}")
 
 
-class User:
-    def __init__(self, spotify_username, sync_mode=None, sync_to_plex_users=[], download_missing=False, schedule=1440):
-        self.spotify_username = str(spotify_username)
-        self.sync_mode = sync_mode
-        self.sync_to_plex_users = list(sync_to_plex_users)
-        self.download_missing = bool(download_missing)
-        self.schedule = int(schedule)
-
-
-class Plex:
-    def __init__(self, baseurl, token, section):
-        self.baseurl = baseurl
-        self.token = token
-        self.section = section
-
-
-class Settings:
-    def __init__(self, config, beets, downloads, unmatched, failed, spotify, clients, plex, playlists):
-        self.config = config
-        self.downloads = downloads
-        self.beets = beets
-        self.unmatched = unmatched
-        self.failed = failed
-        self.spotify = spotify
-        self.clients = clients
-        self.plex = plex
-        self.playlist = playlists
+if __name__ == "__main__":
+    # Example usage
+    try:
+        config = load_config()
+        config.print_summary()
+    except ConfigurationError as e:
+        print(f"Configuration error: {e}")
+    except Exception as e:
+        print(f"Unexpected error: {e}")
