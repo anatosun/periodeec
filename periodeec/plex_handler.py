@@ -19,10 +19,12 @@ class PlexOperationResult:
 
 class PlexHandler:
     def __init__(self, baseurl: str, token: str, section: str = "Music", m3u_path: str = "m3u",
-                 verify_ssl: bool = True, timeout: int = 30, retry_attempts: int = 3):
+                 verify_ssl: bool = True, timeout: int = 30, retry_attempts: int = 3,
+                 music_directory: str = None):
         self.plex_server = PlexServer(baseurl=baseurl, token=token)
         self.section = section
         self.m3u_path = m3u_path
+        self.music_directory = music_directory  # Beets music directory
         self.admin_user = self.plex_server.account().username
 
     def get_plex_instance_for_user(self, username: str):
@@ -63,24 +65,38 @@ class PlexHandler:
         username = self.sanitize_filename(username)
         title = self.sanitize_filename(playlist.title)
 
-        # Create M3U files in a subdirectory of the music library so Plex can access them
-        # Try to use a playlists subdirectory in the music folder
+        # Create M3U files in the music directory where Plex can access them
+        # Use beets directory from config as the primary location
         try:
-            # Get the music library path from Plex
-            section = self.plex_server.library.section(self.section)
-            music_paths = [loc.path for loc in section.locations if hasattr(loc, 'path')]
-
-            if music_paths:
-                # Use the first music library location and create a playlists subfolder
-                music_root = music_paths[0]
-                playlists_dir = os.path.join(music_root, "playlists", username)
+            if self.music_directory:
+                # Use the beets music directory from config
+                music_root = self.music_directory
+                logger.info(f"Using beets music directory: {music_root}")
             else:
-                # Fallback to the configured m3u_path
-                playlists_dir = os.path.join(self.m3u_path, username)
+                # Fallback: try to detect from Plex
+                section = self.plex_server.library.section(self.section)
+                music_paths = []
+
+                if hasattr(section, 'locations'):
+                    music_paths = [loc.path for loc in section.locations if hasattr(loc, 'path')]
+                    logger.debug(f"Detected music library paths from Plex: {music_paths}")
+
+                if music_paths:
+                    music_root = music_paths[0]
+                    logger.info(f"Using detected music library path: {music_root}")
+                else:
+                    # Last resort fallback
+                    music_root = "/music"
+                    logger.warning(f"Using fallback music path: {music_root}")
+
+            playlists_dir = os.path.join(music_root, "playlists", username)
 
         except Exception as e:
-            logger.warning(f"Could not determine music library path, using fallback: {e}")
-            playlists_dir = os.path.join(self.m3u_path, username)
+            logger.warning(f"Could not determine music library path: {e}")
+            # Hard fallback
+            music_root = self.music_directory or "/music"
+            playlists_dir = os.path.join(music_root, "playlists", username)
+            logger.info(f"Using fallback music path: {music_root}")
 
         os.makedirs(playlists_dir, exist_ok=True)
 

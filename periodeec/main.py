@@ -318,7 +318,8 @@ class PeriodeecApplication:
                 m3u_path=self.config.paths.m3u,
                 verify_ssl=plex_config.verify_ssl,
                 timeout=plex_config.timeout,
-                retry_attempts=plex_config.retry_attempts
+                retry_attempts=plex_config.retry_attempts,
+                music_directory=self.config.beets.directory
             )
             
             self.logger.info("All handlers initialized successfully")
