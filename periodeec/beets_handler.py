@@ -260,19 +260,29 @@ class BeetsHandler:
             """Format candidate information for logging."""
             try:
                 # Handle different candidate types (beets version compatibility)
-                if hasattr(candidate, 'info'):
+                if hasattr(candidate, 'info') and candidate.info is not None:
                     info = candidate.info
-                    return f"{info.artist} - {info.album} ({info.year})"
+                    artist = getattr(info, 'artist', 'Unknown Artist')
+                    album = getattr(info, 'album', 'Unknown Album')
+                    year = getattr(info, 'year', 'Unknown')
+                    return f"{artist} - {album} ({year})"
                 elif hasattr(candidate, 'artist') and hasattr(candidate, 'album'):
                     # Direct access for newer beets versions
-                    return f"{candidate.artist} - {candidate.album} ({getattr(candidate, 'year', 'Unknown')})"
+                    artist = getattr(candidate, 'artist', 'Unknown Artist')
+                    album = getattr(candidate, 'album', 'Unknown Album')
+                    year = getattr(candidate, 'year', 'Unknown')
+                    return f"{artist} - {album} ({year})"
                 elif isinstance(candidate, str):
                     return candidate
                 else:
-                    return str(candidate)
+                    # Fallback for any object - try to get meaningful representation
+                    candidate_str = str(candidate)
+                    if hasattr(candidate, '__dict__'):
+                        logger.debug(f"Unknown candidate type with attributes: {list(candidate.__dict__.keys())}")
+                    return candidate_str
             except Exception as e:
-                logger.debug(f"Error formatting candidate: {e}")
-                return str(candidate)
+                logger.debug(f"Error formatting candidate: {e}, type: {type(candidate)}")
+                return f"<Candidate: {type(candidate).__name__}>"
         
         def should_resume(self, path):
             """Don't resume interrupted imports."""
