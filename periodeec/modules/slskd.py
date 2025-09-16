@@ -53,6 +53,8 @@ class Slskd(Downloader):
         self._session: Optional[aiohttp.ClientSession] = None
         self._authenticated = False
         self._last_search_time = 0  # Track last search time for rate limiting
+        self._recent_queries = set()  # Track recent queries to prevent duplicates
+        self._startup_flush_done = False  # Track if we've flushed searches on startup
         
     async def _get_session(self) -> aiohttp.ClientSession:
         """Get or create aiohttp session with proper headers."""
@@ -70,11 +72,47 @@ class Slskd(Downloader):
         
         return self._session
     
+    async def _flush_past_searches(self) -> None:
+        """Flush/clear all past searches on startup."""
+        if self._startup_flush_done:
+            return
+
+        session = await self._get_session()
+
+        try:
+            # Get all existing searches
+            async with session.get(f"{self.base_url}/searches") as resp:
+                if resp.status == 200:
+                    searches = await resp.json()
+
+                    # Delete each search
+                    for search in searches:
+                        search_id = search.get('id')
+                        if search_id:
+                            try:
+                                async with session.delete(f"{self.base_url}/searches/{search_id}") as del_resp:
+                                    if del_resp.status in [200, 204, 404]:  # 404 if already deleted
+                                        continue
+                                    else:
+                                        self._logger.warning(f"Failed to delete search {search_id}: {del_resp.status}")
+                            except Exception as e:
+                                self._logger.warning(f"Error deleting search {search_id}: {e}")
+
+                    self._logger.info(f"Flushed {len(searches)} past searches")
+                else:
+                    self._logger.warning(f"Failed to get existing searches: {resp.status}")
+        except Exception as e:
+            self._logger.warning(f"Error flushing past searches: {e}")
+
+        self._startup_flush_done = True
+
     async def _authenticate(self) -> bool:
         """Authenticate with slskd if needed."""
         if self.api_key:
             # API key authentication
             self._authenticated = True
+            # Flush past searches on startup after authentication
+            await self._flush_past_searches()
             return True
         
         if not self.username or not self.password:
@@ -93,6 +131,8 @@ class Slskd(Downloader):
                 if resp.status == 200:
                     self._authenticated = True
                     self._logger.info("Successfully authenticated with slskd")
+                    # Flush past searches on startup after authentication
+                    await self._flush_past_searches()
                     return True
                 else:
                     self._logger.error(f"Authentication failed: {resp.status}")
@@ -175,9 +215,21 @@ class Slskd(Downloader):
         """Search for files on Soulseek network."""
         if not self._authenticated:
             await self._authenticate()
-        
+
         if not self._authenticated:
             return []
+
+        # Check for duplicate queries
+        query_hash = hash(query.lower().strip())
+        if query_hash in self._recent_queries:
+            self._logger.info(f"Skipping duplicate query: {query}")
+            return []
+
+        # Add to recent queries (keep last 100 to avoid memory issues)
+        self._recent_queries.add(query_hash)
+        if len(self._recent_queries) > 100:
+            # Remove oldest entries (approximate cleanup)
+            self._recent_queries = set(list(self._recent_queries)[-50:])
         
         session = await self._get_session()
 
@@ -369,31 +421,26 @@ class Slskd(Downloader):
     
     async def _async_match(self, isrc: str, artist: str, title: str, album: str = "") -> MatchResult:
         """Async version of match method."""
-        # Build album-focused search query since we're matching with beets
-        # Priority: Album + Artist (better for beets album matching)
+        # Build simple "artist album" query format
         query_parts = []
 
         if album and artist:
-            # Primary strategy: search for the album by the artist
-            query_parts.append(f'"{artist}"')
-            query_parts.append(f'"{album}"')
-            # Add file type hints to improve results
-            query_parts.append("(flac OR mp3 OR m4a)")
+            # Primary strategy: simple "artist album" format
+            query = f"{artist} {album}"
         elif artist and title:
-            # Fallback: individual track search if no album info
-            query_parts.append(f'"{artist}"')
-            query_parts.append(f'"{title}"')
+            # Fallback: "artist title" for individual track search
+            query = f"{artist} {title}"
         elif album:
             # Album only
-            query_parts.append(f'"{album}"')
+            query = album
         elif artist:
             # Artist only
-            query_parts.append(f'"{artist}"')
+            query = artist
         elif title:
             # Title only (last resort)
-            query_parts.append(f'"{title}"')
-
-        query = " ".join(query_parts)
+            query = title
+        else:
+            query = ""
         
         if not query.strip():
             return MatchResult(MatchQuality.NO_MATCH, metadata={"error_message": "No search terms provided"})
@@ -410,9 +457,21 @@ class Slskd(Downloader):
             self._logger.warning(f"No results found for: {query}")
             return MatchResult(MatchQuality.NO_MATCH, metadata={"error_message": "No search results"})
         
-        # Score and rank results
-        scored_results = []
+        # Filter results based on artist and album match
+        filtered_results = []
         for result in results:
+            filename = result['filename'].lower()
+
+            # Basic filtering: ensure artist and album appear in filename/path
+            artist_match = not artist or any(artist.lower() in part.lower() for part in [filename, result.get('path', '')])
+            album_match = not album or any(album.lower() in part.lower() for part in [filename, result.get('path', '')])
+
+            if artist_match and album_match:
+                filtered_results.append(result)
+
+        # Score and rank filtered results
+        scored_results = []
+        for result in filtered_results:
             score, quality = self._score_result(result, artist, title, album)
             if quality != MatchQuality.NO_MATCH:
                 scored_results.append((score, quality, result))
