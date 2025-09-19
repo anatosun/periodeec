@@ -18,6 +18,7 @@ from urllib.parse import urlparse, parse_qs
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 from spotipy.exceptions import SpotifyException
+from spotipy.cache_handler import CacheFileHandler
 
 from periodeec.importers.base_importer import MusicServiceImporter, AuthenticationError, ImporterError, RateLimitError
 from periodeec.schema import User, Track, UserPreferences, UserStats
@@ -180,9 +181,14 @@ class SpotifyImporter(MusicServiceImporter):
                 if not self.client_id or not self.client_secret:
                     raise ImporterError("Spotify client_id and client_secret are required")
 
+                # Use a writable cache directory for spotipy's token cache
+                cache_dir = ".cache/spotify"
+                os.makedirs(cache_dir, exist_ok=True)
+                cache_handler = CacheFileHandler(cache_path=os.path.join(cache_dir, "token_cache"))
                 auth_manager = SpotifyClientCredentials(
                     client_id=self.client_id,
-                    client_secret=self.client_secret
+                    client_secret=self.client_secret,
+                    cache_handler=cache_handler
                 )
                 return spotipy.Spotify(
                     auth_manager=auth_manager,
