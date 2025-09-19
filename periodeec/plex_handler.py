@@ -65,42 +65,11 @@ class PlexHandler:
         username = self.sanitize_filename(username)
         title = self.sanitize_filename(playlist.title)
 
-        # Create M3U files in the music directory where Plex can access them
-        # Use beets directory from config as the primary location
-        try:
-            if self.music_directory:
-                # Use the beets music directory from config
-                music_root = self.music_directory
-                logger.info(f"Using beets music directory: {music_root}")
-            else:
-                # Fallback: try to detect from Plex
-                section = self.plex_server.library.section(self.section)
-                music_paths = []
+        # Use the configured M3U path from configuration
+        user_m3u_path = os.path.join(self.m3u_path, username)
+        os.makedirs(user_m3u_path, exist_ok=True)
 
-                if hasattr(section, 'locations'):
-                    music_paths = [loc.path for loc in section.locations if hasattr(loc, 'path')]
-                    logger.debug(f"Detected music library paths from Plex: {music_paths}")
-
-                if music_paths:
-                    music_root = music_paths[0]
-                    logger.info(f"Using detected music library path: {music_root}")
-                else:
-                    # Last resort fallback
-                    music_root = "/music"
-                    logger.warning(f"Using fallback music path: {music_root}")
-
-            playlists_dir = os.path.join(music_root, "playlists", username)
-
-        except Exception as e:
-            logger.warning(f"Could not determine music library path: {e}")
-            # Hard fallback
-            music_root = self.music_directory or "/music"
-            playlists_dir = os.path.join(music_root, "playlists", username)
-            logger.info(f"Using fallback music path: {music_root}")
-
-        os.makedirs(playlists_dir, exist_ok=True)
-
-        m3u_file_path = os.path.join(playlists_dir, f"{title}.m3u")
+        m3u_file_path = os.path.join(user_m3u_path, f"{title}.m3u")
 
         # Write with explicit UTF-8 encoding to handle unicode characters properly
         with open(m3u_file_path, "w", encoding="utf-8") as m3u_file:
