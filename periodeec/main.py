@@ -334,32 +334,42 @@ class PeriodeecApplication:
             # Initialize Last.fm importer if enabled
             lastfm_config = self.config.importers.lastfm
             if lastfm_config.enabled:
-                lastfm_importer_config = {
-                    'api_key': lastfm_config.api_key,
-                    'api_secret': lastfm_config.api_secret,
-                    'rate_limit_rpm': lastfm_config.rate_limit_rpm,
-                    'add_source_to_titles': lastfm_config.add_source_to_titles,
-                    'source_tag_format': lastfm_config.source_tag_format,
-                    'default_limit': lastfm_config.default_limit,
-                    'max_retries': lastfm_config.max_retries
-                }
-                self.lastfm_importer = LastFMImporter(lastfm_importer_config)
-                await self.lastfm_importer.authenticate()
+                try:
+                    lastfm_importer_config = {
+                        'api_key': lastfm_config.api_key,
+                        'api_secret': lastfm_config.api_secret,
+                        'rate_limit_rpm': lastfm_config.rate_limit_rpm,
+                        'add_source_to_titles': lastfm_config.add_source_to_titles,
+                        'source_tag_format': lastfm_config.source_tag_format,
+                        'default_limit': lastfm_config.default_limit,
+                        'max_retries': lastfm_config.max_retries
+                    }
+                    self.lastfm_importer = LastFMImporter(lastfm_importer_config)
+                    await self.lastfm_importer.authenticate()
+                    logger.info("Last.fm importer initialized successfully")
+                except Exception as e:
+                    logger.warning(f"Failed to initialize Last.fm importer: {e}")
+                    self.lastfm_importer = None
 
             # Initialize ListenBrainz importer if enabled
             listenbrainz_config = self.config.importers.listenbrainz
             if listenbrainz_config.enabled:
-                listenbrainz_importer_config = {
-                    'user_token': listenbrainz_config.user_token,
-                    'server_url': listenbrainz_config.server_url,
-                    'rate_limit_rpm': listenbrainz_config.rate_limit_rpm,
-                    'add_source_to_titles': listenbrainz_config.add_source_to_titles,
-                    'source_tag_format': listenbrainz_config.source_tag_format,
-                    'default_limit': listenbrainz_config.default_limit,
-                    'max_retries': listenbrainz_config.max_retries
-                }
-                self.listenbrainz_importer = ListenBrainzImporter(listenbrainz_importer_config)
-                await self.listenbrainz_importer.authenticate()
+                try:
+                    listenbrainz_importer_config = {
+                        'user_token': listenbrainz_config.user_token,
+                        'server_url': listenbrainz_config.server_url,
+                        'rate_limit_rpm': listenbrainz_config.rate_limit_rpm,
+                        'add_source_to_titles': listenbrainz_config.add_source_to_titles,
+                        'source_tag_format': listenbrainz_config.source_tag_format,
+                        'default_limit': listenbrainz_config.default_limit,
+                        'max_retries': listenbrainz_config.max_retries
+                    }
+                    self.listenbrainz_importer = ListenBrainzImporter(listenbrainz_importer_config)
+                    await self.listenbrainz_importer.authenticate()
+                    logger.info("ListenBrainz importer initialized successfully")
+                except Exception as e:
+                    logger.warning(f"Failed to initialize ListenBrainz importer: {e}")
+                    self.listenbrainz_importer = None
 
             # Initialize Plex handler
             plex_config = self.config.plex
