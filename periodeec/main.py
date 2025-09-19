@@ -590,8 +590,8 @@ class PeriodeecApplication:
                     'sync_to_plex_users': user_config.sync_to_plex_users,
                     'download_missing': user_config.download_missing,
                     'create_m3u': user_config.create_m3u,
-                    'summary': None,
-                    'poster': None
+                    'summary': playlist.description or playlist.summary,
+                    'poster': playlist.poster
                 })()
                 
                 # Use original playlist title for display, but unique name for tracking
