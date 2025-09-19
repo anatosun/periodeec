@@ -314,30 +314,32 @@ class BeetsHandler:
             if task.rec == Recommendation.strong:
                 match = task.candidates[0]
                 logger.info(f"Strong album match found: {self.prettify_candidate(match)}")
-                
+
                 if self.handler_ref:
                     self.handler_ref._import_stats['strong_matches'] += 1
-                
+
                 self.import_result = ImportResult(
-                    True, 
+                    True,
                     f"Strong match found among {len(task.candidates)} candidates",
                     details={'match_strength': 'strong', 'candidate_count': len(task.candidates)}
                 )
-                return match
+                task.set_choice(match)
+                return action.APPLY
             
             elif task.rec == Recommendation.medium and self.auto_mode:
                 match = task.candidates[0]
                 logger.info(f"Medium album match found: {self.prettify_candidate(match)}")
-                
+
                 if self.handler_ref:
                     self.handler_ref._import_stats['weak_matches'] += 1
-                
+
                 self.import_result = ImportResult(
-                    True, 
+                    True,
                     f"Medium match found among {len(task.candidates)} candidates",
                     details={'match_strength': 'medium', 'candidate_count': len(task.candidates)}
                 )
-                return match
+                task.set_choice(match)
+                return action.APPLY
             
             else:
                 logger.warning(f"No suitable album match found (recommendation: {task.rec})")
@@ -376,30 +378,32 @@ class BeetsHandler:
             if task.rec == Recommendation.strong:
                 match = task.candidates[0]
                 logger.info(f"Strong track match found: {self.prettify_candidate(match)}")
-                
+
                 if self.handler_ref:
                     self.handler_ref._import_stats['strong_matches'] += 1
-                
+
                 self.import_result = ImportResult(
-                    True, 
+                    True,
                     f"Strong track match found among {len(task.candidates)} candidates",
                     details={'match_strength': 'strong', 'candidate_count': len(task.candidates)}
                 )
-                return match
+                task.set_choice(match)
+                return action.APPLY
             
             elif task.rec == Recommendation.medium and self.auto_mode:
                 match = task.candidates[0]
                 logger.info(f"Medium track match found: {self.prettify_candidate(match)}")
-                
+
                 if self.handler_ref:
                     self.handler_ref._import_stats['weak_matches'] += 1
-                
+
                 self.import_result = ImportResult(
-                    True, 
+                    True,
                     f"Medium track match found among {len(task.candidates)} candidates",
                     details={'match_strength': 'medium', 'candidate_count': len(task.candidates)}
                 )
-                return match
+                task.set_choice(match)
+                return action.APPLY
             
             else:
                 logger.warning(f"No suitable track match found (recommendation: {task.rec})")
