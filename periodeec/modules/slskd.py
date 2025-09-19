@@ -1,6 +1,6 @@
 import os
-import asyncio
-import aiohttp
+import time
+import requests
 import logging
 from typing import Dict, Any, List, Optional
 from urllib.parse import quote
@@ -31,25 +31,24 @@ class Slskd(Downloader):
         self.min_bitrate = min_bitrate
         self.preferred_formats = preferred_formats or ['flac', 'alac', 'mp3', 'm4a']
 
-        self._session: Optional[aiohttp.ClientSession] = None
+        self._session: Optional[requests.Session] = None
         self._authenticated = False
 
-    async def _get_session(self) -> aiohttp.ClientSession:
-        """Get or create aiohttp session."""
-        if self._session is None or self._session.closed:
-            headers = {}
-            if self.api_key:
-                headers['X-API-Key'] = self.api_key
+    def _get_session(self) -> requests.Session:
+        """Get or create requests session."""
+        if self._session is None:
+            self._session = requests.Session()
 
-            timeout = aiohttp.ClientTimeout(total=self.timeout)
-            self._session = aiohttp.ClientSession(
-                headers=headers,
-                timeout=timeout,
-                connector=aiohttp.TCPConnector(verify_ssl=False)
-            )
+            if self.api_key:
+                self._session.headers.update({'X-API-Key': self.api_key})
+
+            # Set timeout and disable SSL verification
+            self._session.timeout = self.timeout
+            self._session.verify = False
+
         return self._session
 
-    async def _authenticate(self) -> bool:
+    def _authenticate(self) -> bool:
         """Authenticate with slskd if needed."""
         if self.api_key:
             self._authenticated = True
@@ -59,17 +58,17 @@ class Slskd(Downloader):
             self._logger.error("No API key or username/password provided")
             return False
 
-        session = await self._get_session()
+        session = self._get_session()
         try:
             auth_data = {'username': self.username, 'password': self.password}
-            async with session.post(f"{self.base_url}/session", json=auth_data) as resp:
-                if resp.status == 200:
-                    self._authenticated = True
-                    self._logger.info("Successfully authenticated with slskd")
-                    return True
-                else:
-                    self._logger.error(f"Authentication failed: {resp.status}")
-                    return False
+            resp = session.post(f"{self.base_url}/session", json=auth_data, timeout=self.timeout)
+            if resp.status_code == 200:
+                self._authenticated = True
+                self._logger.info("Successfully authenticated with slskd")
+                return True
+            else:
+                self._logger.error(f"Authentication failed: {resp.status_code}")
+                return False
         except Exception as e:
             self._logger.error(f"Authentication error: {e}")
             return False
@@ -110,40 +109,40 @@ class Slskd(Downloader):
             'quality_score': quality_score
         }
 
-    async def _simple_search(self, query: str) -> List[Dict[str, Any]]:
+    def _simple_search(self, query: str) -> List[Dict[str, Any]]:
         """Simple search for files on Soulseek network."""
         if not self._authenticated:
-            await self._authenticate()
+            self._authenticate()
 
         if not self._authenticated:
             return []
 
-        session = await self._get_session()
+        session = self._get_session()
 
         try:
             # Start search
-            async with session.post(f"{self.base_url}/searches",
-                                  json={'searchText': query}) as resp:
-                if resp.status not in [200, 201]:
-                    self._logger.error(f"Search failed: {resp.status}")
-                    return []
+            resp = session.post(f"{self.base_url}/searches",
+                              json={'searchText': query}, timeout=self.timeout)
+            if resp.status_code not in [200, 201]:
+                self._logger.error(f"Search failed: {resp.status_code}")
+                return []
 
-                search_data = await resp.json()
-                search_id = search_data.get('id')
+            search_data = resp.json()
+            search_id = search_data.get('id')
 
             if not search_id:
                 self._logger.error("No search ID returned")
                 return []
 
             # Wait for search to complete (simplified - just wait 15 seconds)
-            await asyncio.sleep(15)
+            time.sleep(15)
 
             # Get results
-            async with session.get(f"{self.base_url}/searches/{search_id}/responses") as resp:
-                if resp.status != 200:
-                    return []
+            resp = session.get(f"{self.base_url}/searches/{search_id}/responses", timeout=self.timeout)
+            if resp.status_code != 200:
+                return []
 
-                responses = await resp.json()
+            responses = resp.json()
 
             # Process results
             results = []
@@ -169,7 +168,7 @@ class Slskd(Downloader):
 
             # Clean up search
             try:
-                await session.delete(f"{self.base_url}/searches/{search_id}")
+                session.delete(f"{self.base_url}/searches/{search_id}", timeout=self.timeout)
             except:
                 pass  # Ignore cleanup errors
 
@@ -211,7 +210,7 @@ class Slskd(Downloader):
 
         return sorted(results, key=quality_key, reverse=True)
 
-    async def _async_match(self, isrc: str, artist: str, title: str, album: str = "") -> MatchResult:
+    def _match(self, isrc: str, artist: str, title: str, album: str = "") -> MatchResult:
         """Simple match method - search for artist + album."""
         # Build simple query
         if album and artist:
@@ -230,7 +229,7 @@ class Slskd(Downloader):
         self._logger.info(f"Searching Soulseek for: {query}")
 
         # Search
-        results = await self._simple_search(query)
+        results = self._simple_search(query)
 
         if not results:
             return MatchResult(MatchQuality.NO_MATCH,
@@ -275,58 +274,48 @@ class Slskd(Downloader):
     def match(self, isrc: str, artist: str, title: str, album: str = "") -> MatchResult:
         """Find the best match for a track on Soulseek network."""
         try:
-            # Check if we're already in an async context
-            try:
-                loop = asyncio.get_running_loop()
-                # If we get here, we're in an async context - need to use different approach
-                import concurrent.futures
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, self._async_match(isrc, artist, title, album))
-                    return future.result()
-            except RuntimeError:
-                # No running loop, safe to use run_until_complete
-                return asyncio.run(self._async_match(isrc, artist, title, album))
+            return self._match(isrc, artist, title, album)
         except Exception as e:
             self._logger.error(f"Match failed: {e}")
             return MatchResult(MatchQuality.NO_MATCH, metadata={"error": str(e)})
 
-    async def _async_download(self, username: str, filename: str, destination: str) -> bool:
+    def _download(self, username: str, filename: str, destination: str) -> bool:
         """Download a file from Soulseek user."""
-        session = await self._get_session()
+        session = self._get_session()
 
         try:
             # Initiate download
             download_data = {'username': username, 'files': [filename]}
 
-            async with session.post(f"{self.base_url}/transfers/downloads",
-                                  json=download_data) as resp:
-                if resp.status != 201:
-                    self._logger.error(f"Download failed: {resp.status}")
-                    return False
+            resp = session.post(f"{self.base_url}/transfers/downloads",
+                              json=download_data, timeout=self.timeout)
+            if resp.status_code != 201:
+                self._logger.error(f"Download failed: {resp.status_code}")
+                return False
 
-                transfer_data = await resp.json()
-                transfer_id = transfer_data.get('id')
+            transfer_data = resp.json()
+            transfer_id = transfer_data.get('id')
 
             if not transfer_id:
                 return False
 
             # Simple download monitoring - wait for completion
             for _ in range(self.timeout // 5):  # Check every 5 seconds
-                await asyncio.sleep(5)
+                time.sleep(5)
 
-                async with session.get(f"{self.base_url}/transfers/downloads/{transfer_id}") as resp:
-                    if resp.status != 200:
-                        continue
+                resp = session.get(f"{self.base_url}/transfers/downloads/{transfer_id}", timeout=self.timeout)
+                if resp.status_code != 200:
+                    continue
 
-                    transfer_info = await resp.json()
-                    state = transfer_info.get('state', '')
+                transfer_info = resp.json()
+                state = transfer_info.get('state', '')
 
-                    if state == 'Completed, Succeeded':
-                        self._logger.info("Download completed")
-                        return True
-                    elif 'Errored' in state or 'Cancelled' in state:
-                        self._logger.error(f"Download failed: {state}")
-                        return False
+                if state == 'Completed, Succeeded':
+                    self._logger.info("Download completed")
+                    return True
+                elif 'Errored' in state or 'Cancelled' in state:
+                    self._logger.error(f"Download failed: {state}")
+                    return False
 
             self._logger.error("Download timed out")
             return False
@@ -335,11 +324,11 @@ class Slskd(Downloader):
             self._logger.error(f"Download error: {e}")
             return False
 
-    async def _async_enqueue(self, path: str, isrc: str, artist: str,
-                           title: str, album: str = "") -> DownloadResult:
+    def _enqueue(self, path: str, isrc: str, artist: str,
+                title: str, album: str = "") -> DownloadResult:
         """Simple enqueue method."""
         # Find match
-        match_result = await self._async_match(isrc, artist, title, album)
+        match_result = self._match(isrc, artist, title, album)
 
         if not match_result.found:
             return DownloadResult(
@@ -363,7 +352,7 @@ class Slskd(Downloader):
         os.makedirs(path, exist_ok=True)
 
         # Download
-        success = await self._async_download(username, filename, path)
+        success = self._download(username, filename, path)
 
         if success:
             return DownloadResult(
@@ -383,17 +372,7 @@ class Slskd(Downloader):
     def enqueue(self, path: str, isrc: str, artist: str, title: str, album: str = "") -> DownloadResult:
         """Download a track from Soulseek network."""
         try:
-            # Check if we're already in an async context
-            try:
-                loop = asyncio.get_running_loop()
-                # If we get here, we're in an async context - need to use different approach
-                import concurrent.futures
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, self._async_enqueue(path, isrc, artist, title, album))
-                    return future.result()
-            except RuntimeError:
-                # No running loop, safe to use run_until_complete
-                return asyncio.run(self._async_enqueue(path, isrc, artist, title, album))
+            return self._enqueue(path, isrc, artist, title, album)
         except Exception as e:
             self._logger.error(f"Enqueue failed: {e}")
             return DownloadResult(status=DownloadStatus.FAILED, error_message=str(e))
@@ -417,7 +396,7 @@ class Slskd(Downloader):
             "retry_after_seconds": 10
         }
 
-    async def cleanup(self) -> None:
+    def cleanup(self) -> None:
         """Cleanup resources."""
-        if self._session and not self._session.closed:
-            await self._session.close()
+        if self._session:
+            self._session.close()
