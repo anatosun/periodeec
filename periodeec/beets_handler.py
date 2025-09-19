@@ -42,18 +42,19 @@ class ImportResult:
 class BeetsHandler:
     """Beets handler with import control, caching, and error handling."""
     
-    def __init__(self, library: str, directory: str, plex_baseurl: str = "", 
-                 plex_token: str = "", plex_section: str = 'Music',
+    def __init__(self, library: str, directory: str, failed_path: str = "./failed",
+                 plex_baseurl: str = "", plex_token: str = "", plex_section: str = 'Music',
                  spotify_client_id: str = "", spotify_client_secret: str = "",
                  beets_plugins: List[str] = None, fuzzy: bool = False,
                  auto_import: bool = True, strong_rec_thresh: float = 0.15,
                  timid: bool = False, duplicate_action: str = 'skip'):
         """
         Initialize the Beets handler.
-        
+
         Args:
             library: Path to Beets library database
             directory: Music directory path
+            failed_path: Path to move failed imports
             plex_baseurl: Plex server URL for updates
             plex_token: Plex authentication token
             plex_section: Plex music section name
@@ -69,6 +70,7 @@ class BeetsHandler:
         # Store configuration
         self.library_path = os.path.abspath(library)
         self.directory_path = os.path.abspath(directory)
+        self.failed_path = os.path.abspath(failed_path)
         self.plex_baseurl = plex_baseurl
         self.plex_token = plex_token
         self.plex_section = plex_section
@@ -509,7 +511,35 @@ class BeetsHandler:
         except Exception as e:
             logger.debug(f"Query execution failed: {e}")
             return []
-    
+
+    def _move_to_failed(self, path: str) -> bool:
+        """Move a file or directory to the failed directory."""
+        try:
+            import shutil
+
+            # Ensure failed directory exists
+            os.makedirs(self.failed_path, exist_ok=True)
+
+            # Get filename/dirname for destination
+            basename = os.path.basename(path)
+            dest_path = os.path.join(self.failed_path, basename)
+
+            # Handle conflicts by adding a timestamp
+            if os.path.exists(dest_path):
+                import time
+                timestamp = int(time.time())
+                name, ext = os.path.splitext(basename)
+                dest_path = os.path.join(self.failed_path, f"{name}_{timestamp}{ext}")
+
+            # Move the file/directory
+            shutil.move(path, dest_path)
+            logger.info(f"Moved failed import to: {dest_path}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to move {path} to failed directory: {e}")
+            return False
+
     def add(self, path: str, search_id: str = "", force: bool = False) -> ImportResult:
         """
         Import music files with error handling and options.
@@ -598,13 +628,19 @@ class BeetsHandler:
             else:
                 self._import_stats['failed_imports'] += 1
                 logger.warning(f"Import failed: {session.import_result.message}")
-            
+                # Move failed import to failed directory
+                if os.path.exists(path):
+                    self._move_to_failed(path)
+
             return session.import_result
-            
+
         except Exception as e:
             error_msg = f"Import session failed: {e}"
             logger.error(error_msg)
             self._import_stats['failed_imports'] += 1
+            # Move failed import to failed directory
+            if os.path.exists(path):
+                self._move_to_failed(path)
             return ImportResult(False, error_msg)
     
     def batch_add(self, paths: List[str], search_ids: List[str] = None) -> List[ImportResult]:
