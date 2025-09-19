@@ -621,13 +621,9 @@ class Config:
                 issues.append(f"Collection '{name}' missing URL")
         
         for name, user in self.users.items():
-            # Check if user has either legacy spotify_username or new service_connections
-            has_spotify = (
-                user.spotify_username or
-                user.service_connections.spotify_username
-            )
-            if not has_spotify:
-                issues.append(f"User '{name}' missing spotify connection (spotify_username or service_connections.spotify_username)")
+            # Check if user has spotify connection
+            if not user.service_connections.spotify_username:
+                issues.append(f"User '{name}' missing spotify connection (service_connections.spotify_username required)")
         
         return issues
     
@@ -773,12 +769,21 @@ class Config:
             
             config_data['users'] = {
                 name: {
-                    'spotify_username': user.spotify_username,
+                    'service_connections': {
+                        'spotify_username': user.service_connections.spotify_username,
+                        'lastfm_username': user.service_connections.lastfm_username,
+                        'listenbrainz_username': user.service_connections.listenbrainz_username
+                    },
+                    'import_preferences': {
+                        'primary_service': user.import_preferences.primary_service,
+                        'enabled_services': user.import_preferences.enabled_services,
+                        'spotify': user.import_preferences.spotify,
+                        'lastfm': user.import_preferences.lastfm,
+                        'listenbrainz': user.import_preferences.listenbrainz
+                    },
                     'sync_to_plex_users': user.sync_to_plex_users,
                     'download_missing': user.download_missing,
                     'create_m3u': user.create_m3u,
-                    'include_collaborative': user.include_collaborative,
-                    'include_followed': user.include_followed,
                     'schedule_minutes': user.schedule_minutes,
                     'enabled': user.enabled,
                     'overwrite': user.overwrite
@@ -988,12 +993,31 @@ def create_example_config(output_path: str = "config/example-config.yaml"):
         '# User sync configurations': None,
         'users': {
             'example_user': {
-                'spotify_username': 'spotify_username',
+                'service_connections': {
+                    'spotify_username': 'your_spotify_username',
+                    'lastfm_username': 'your_lastfm_username',
+                    'listenbrainz_username': 'your_listenbrainz_username'
+                },
+                'import_preferences': {
+                    'primary_service': 'spotify',
+                    'enabled_services': ['spotify'],
+                    'spotify': {
+                        'include_collaborative': True,
+                        'include_followed': False
+                    },
+                    'lastfm': {
+                        'include_top_tracks': True,
+                        'include_loved_tracks': True,
+                        'top_tracks_periods': ['overall', '12month']
+                    },
+                    'listenbrainz': {
+                        'include_top_artists': True,
+                        'include_recent_listens': True
+                    }
+                },
                 'sync_to_plex_users': ['plex_username'],
                 'download_missing': True,
                 'create_m3u': True,
-                'include_collaborative': True,
-                'include_followed': False,
                 'schedule_minutes': 1440,
                 'enabled': True,
                 'overwrite': True
