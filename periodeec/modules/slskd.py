@@ -275,13 +275,17 @@ class Slskd(Downloader):
     def match(self, isrc: str, artist: str, title: str, album: str = "") -> MatchResult:
         """Find the best match for a track on Soulseek network."""
         try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-        try:
-            return loop.run_until_complete(self._async_match(isrc, artist, title, album))
+            # Check if we're already in an async context
+            try:
+                loop = asyncio.get_running_loop()
+                # If we get here, we're in an async context - need to use different approach
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self._async_match(isrc, artist, title, album))
+                    return future.result()
+            except RuntimeError:
+                # No running loop, safe to use run_until_complete
+                return asyncio.run(self._async_match(isrc, artist, title, album))
         except Exception as e:
             self._logger.error(f"Match failed: {e}")
             return MatchResult(MatchQuality.NO_MATCH, metadata={"error": str(e)})
@@ -379,13 +383,17 @@ class Slskd(Downloader):
     def enqueue(self, path: str, isrc: str, artist: str, title: str, album: str = "") -> DownloadResult:
         """Download a track from Soulseek network."""
         try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-        try:
-            return loop.run_until_complete(self._async_enqueue(path, isrc, artist, title, album))
+            # Check if we're already in an async context
+            try:
+                loop = asyncio.get_running_loop()
+                # If we get here, we're in an async context - need to use different approach
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self._async_enqueue(path, isrc, artist, title, album))
+                    return future.result()
+            except RuntimeError:
+                # No running loop, safe to use run_until_complete
+                return asyncio.run(self._async_enqueue(path, isrc, artist, title, album))
         except Exception as e:
             self._logger.error(f"Enqueue failed: {e}")
             return DownloadResult(status=DownloadStatus.FAILED, error_message=str(e))
