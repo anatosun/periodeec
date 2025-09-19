@@ -45,7 +45,7 @@ importers:
     enabled: true
     client_id: YOUR_SPOTIFY_CLIENT_ID
     client_secret: YOUR_SPOTIFY_CLIENT_SECRET
-    anonymous: false
+    anonymous: true  # Set to false and provide credentials for full access
     cache_enabled: true
     cache_ttl_hours: 24
     rate_limit_rpm: 100
@@ -58,7 +58,7 @@ importers:
 
   # Last.FM configuration
   lastfm:
-    enabled: true
+    enabled: false  # Set to true and provide credentials to enable
     api_key: YOUR_LASTFM_API_KEY
     api_secret: YOUR_LASTFM_API_SECRET
     rate_limit_rpm: 200
@@ -76,7 +76,7 @@ importers:
 
   # ListenBrainz configuration
   listenbrainz:
-    enabled: true
+    enabled: false  # Set to true to enable
     user_token: YOUR_LISTENBRAINZ_TOKEN # Optional for public data
     server_url: https://listenbrainz.org
     rate_limit_rpm: 60
@@ -91,7 +91,7 @@ importers:
 downloaders:
   # Qobuz high-quality downloads
   qobuz:
-    enabled: true
+    enabled: false  # Set to true and provide credentials to enable
     email: YOUR_QOBUZ_EMAIL
     password: YOUR_QOBUZ_PASSWORD
     quality: 27 # 5=MP3_320, 6=FLAC, 7=24-Bit, 27=Hi-Res
@@ -102,7 +102,7 @@ downloaders:
 
   # Soulseek P2P via slskd
   slskd:
-    enabled: true
+    enabled: false  # Set to true and provide credentials to enable
     host: localhost
     port: 5030
     api_key: YOUR_SLSKD_API_KEY

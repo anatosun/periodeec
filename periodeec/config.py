@@ -641,12 +641,20 @@ class Config:
         if not self.plex.token:
             issues.append("Plex token is required")
         
-        # Validate Spotify configuration (if not anonymous)
-        if not self.spotify.anonymous:
-            if not self.spotify.client_id:
+        # Validate importer configurations
+        if self.importers.spotify.enabled and not self.importers.spotify.anonymous:
+            if not self.importers.spotify.client_id:
                 issues.append("Spotify client_id is required when not using anonymous mode")
-            if not self.spotify.client_secret:
+            if not self.importers.spotify.client_secret:
                 issues.append("Spotify client_secret is required when not using anonymous mode")
+
+        if self.importers.lastfm.enabled:
+            if not self.importers.lastfm.api_key:
+                issues.append("Last.FM api_key is required when Last.FM is enabled")
+            if not self.importers.lastfm.api_secret:
+                issues.append("Last.FM api_secret is required when Last.FM is enabled")
+
+        # ListenBrainz doesn't require validation as it can work without token for public data
         
         # Validate downloader configurations
         for name, downloader in self.downloaders.items():
