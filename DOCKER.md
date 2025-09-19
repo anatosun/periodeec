@@ -17,6 +17,8 @@ This guide covers the improved Docker setup for Periodeec with security best pra
    # Edit config/config.yaml with your settings
    ```
 
+   **Note:** The Docker setup expects the config file to be at `./config/config.yaml` (inside a config directory), not in the project root.
+
 3. **Build and run:**
    ```bash
    docker-compose -f docker-compose.improved.yml up -d
@@ -214,9 +216,20 @@ docker exec periodeec id
 # Validate configuration
 docker exec periodeec python -m periodeec.main --validate-config
 
-# Check configuration loading
-docker exec periodeec python -c "from periodeec.config import load_config; print('Config OK')"
+# Check if config file is accessible in container
+docker exec periodeec ls -la /config/
+
+# Test config loading
+docker exec periodeec python -c "from periodeec.config import load_config; load_config('/config/config.yaml'); print('Config OK')"
+
+# Check environment variables
+docker exec periodeec env | grep PERIODEEC
 ```
+
+**Common Config Issues:**
+- **File not found**: Ensure `./config/config.yaml` exists on host (not `./config.yaml`)
+- **Permission denied**: Check file permissions with `ls -la config/`
+- **Mount path**: Verify Docker Compose volume mount `./config:/config:ro`
 
 ### Cache Issues
 ```bash
