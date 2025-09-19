@@ -379,14 +379,15 @@ class PeriodeecApplication:
         
         return all(validation_results)
     
-    async def sync_playlist(self, playlist_config, playlist_name: str) -> bool:
+    async def sync_playlist(self, playlist_config, playlist_name: str, original_title: str = None) -> bool:
         """Sync a single playlist."""
         try:
-            self.logger.info(f"Starting sync for playlist: {playlist_name}")
+            display_title = original_title or playlist_config.title or playlist_name
+            self.logger.info(f"Starting sync for playlist: {display_title}")
             start_time = time.time()
-            
+
             # Create playlist object from config (we'll get tracks to determine count)
-            playlist_title = playlist_config.title or playlist_name
+            playlist_title = original_title or playlist_config.title or playlist_name
             playlist_path = os.path.join(self.config.paths.playlists, f"{playlist_name}.json")
 
             # Get tracks first to determine actual count
@@ -593,7 +594,9 @@ class PeriodeecApplication:
                     'poster': None
                 })()
                 
-                if await self.sync_playlist(temp_config, f"{username}_{playlist.title}"):
+                # Use original playlist title for display, but unique name for tracking
+                unique_name = f"{username}_{playlist.title}"
+                if await self.sync_playlist(temp_config, unique_name, original_title=playlist.title):
                     success_count += 1
             
             sync_time = time.time() - start_time
