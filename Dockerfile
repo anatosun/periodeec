@@ -28,7 +28,7 @@ RUN pip install --upgrade pip setuptools wheel \
 # Copy source code and install application
 COPY . /app
 WORKDIR /app
-RUN pip install -e .
+RUN pip install .
 
 # Production stage - minimal runtime image
 FROM python:3.11-slim-bookworm AS production
