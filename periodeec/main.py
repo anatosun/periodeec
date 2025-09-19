@@ -595,32 +595,40 @@ class PeriodeecApplication:
             self.stats.record_error('user_sync')
             return False
     
+    def _sync_user_wrapper(self, user_config, username: str):
+        """Synchronous wrapper for async sync_user method."""
+        return asyncio.run(self.sync_user(user_config, username))
+
+    def _health_check_wrapper(self):
+        """Synchronous wrapper for async _health_check method."""
+        return asyncio.run(self._health_check())
+
     def setup_scheduler(self):
         """Setup scheduled tasks."""
         self.logger.info("Setting up scheduler")
-        
+
         # Schedule playlist syncs
         for name, playlist_config in self.config.get_enabled_playlists().items():
             schedule.every(playlist_config.schedule_minutes).minutes.do(
                 self.sync_playlist, playlist_config, name
             )
             self.logger.info(f"Scheduled playlist '{name}' every {playlist_config.schedule_minutes} minutes")
-        
+
         # Schedule user syncs
         for name, user_config in self.config.get_enabled_users().items():
             schedule.every(user_config.schedule_minutes).minutes.do(
-                self.sync_user, user_config, name
+                self._sync_user_wrapper, user_config, name
             )
             self.logger.info(f"Scheduled user '{name}' every {user_config.schedule_minutes} minutes")
-        
+
         # Schedule statistics save
         if self.config.advanced.enable_statistics:
             schedule.every(10).minutes.do(self._save_statistics)
-        
+
         # Schedule health check
         if self.config.advanced.health_check_interval_minutes > 0:
             schedule.every(self.config.advanced.health_check_interval_minutes).minutes.do(
-                self._health_check
+                self._health_check_wrapper
             )
     
     def _save_statistics(self):
