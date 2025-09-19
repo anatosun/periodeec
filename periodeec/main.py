@@ -25,7 +25,7 @@ import json
 from periodeec.config import load_config, ConfigurationError, Config
 from periodeec.beets_handler import BeetsHandler
 from periodeec.plex_handler import PlexHandler
-from periodeec.spotify_handler import SpotifyHandler
+from periodeec.importers.spotify_importer import SpotifyImporter
 from periodeec.download_manager import DownloadManager
 from periodeec.schema import Track
 from periodeec.schema import User
@@ -133,7 +133,7 @@ class PeriodeecApplication:
         self.executor = ThreadPoolExecutor(max_workers=4)
         
         # Component instances
-        self.spotify_handler: Optional[SpotifyHandler] = None
+        self.spotify_importer: Optional[SpotifyImporter] = None
         self.plex_handler: Optional[PlexHandler] = None
         self.beets_handler: Optional[BeetsHandler] = None
         self.download_manager: Optional[DownloadManager] = None
@@ -189,7 +189,7 @@ class PeriodeecApplication:
         self.logger = logging.getLogger(__name__)
         self.logger.info("Logging system initialized")
     
-    def initialize(self) -> bool:
+    async def initialize(self) -> bool:
         """Initialize the application components."""
         try:
             # Load configuration
@@ -206,11 +206,11 @@ class PeriodeecApplication:
             if not self._initialize_downloaders():
                 return False
             
-            if not self._initialize_handlers():
+            if not await self._initialize_handlers():
                 return False
             
             # Validate connections
-            if not self._validate_connections():
+            if not await self._validate_connections():
                 return False
             
             self.logger.info("Application initialized successfully")
@@ -275,7 +275,7 @@ class PeriodeecApplication:
             self.logger.error(f"Failed to initialize downloaders: {e}")
             return False
     
-    def _initialize_handlers(self) -> bool:
+    async def _initialize_handlers(self) -> bool:
         """Initialize service handlers."""
         try:
             # Initialize Beets handler
@@ -295,19 +295,24 @@ class PeriodeecApplication:
                 duplicate_action=self.config.beets.duplicate_action
             )
             
-            # Initialize Spotify handler
+            # Initialize Spotify importer
             spotify_config = self.config.spotify
-            self.spotify_handler = SpotifyHandler(
-                client_id=spotify_config.client_id,
-                client_secret=spotify_config.client_secret,
-                path=self.config.paths.playlists,
-                anonymous=spotify_config.anonymous,
-                cache_enabled=spotify_config.cache_enabled,
-                cache_ttl_hours=spotify_config.cache_ttl_hours,
-                rate_limit_rpm=int(spotify_config.rate_limit_rpm * self.config.advanced.rate_limit_buffer),
-                retry_attempts=spotify_config.retry_attempts,
-                request_timeout=spotify_config.request_timeout
-            )
+            spotify_importer_config = {
+                'client_id': spotify_config.client_id,
+                'client_secret': spotify_config.client_secret,
+                'anonymous': spotify_config.anonymous,
+                'cache_enabled': spotify_config.cache_enabled,
+                'cache_ttl_hours': spotify_config.cache_ttl_hours,
+                'rate_limit_rpm': int(spotify_config.rate_limit_rpm * self.config.advanced.rate_limit_buffer),
+                'retry_attempts': spotify_config.retry_attempts,
+                'request_timeout': spotify_config.request_timeout,
+                'add_source_to_titles': getattr(spotify_config, 'add_source_to_titles', False),
+                'include_collaborative': getattr(spotify_config, 'include_collaborative', True),
+                'include_followed': getattr(spotify_config, 'include_followed', False)
+            }
+            self.spotify_importer = SpotifyImporter(spotify_importer_config)
+            # Authenticate the importer
+            await self.spotify_importer.authenticate()
             
             # Initialize Plex handler
             plex_config = self.config.plex
@@ -329,12 +334,12 @@ class PeriodeecApplication:
             self.logger.error(f"Failed to initialize handlers: {e}")
             return False
     
-    def _validate_connections(self) -> bool:
+    async def _validate_connections(self) -> bool:
         """Validate connections to external services."""
         validation_results = []
         
         # Validate Spotify
-        if self.spotify_handler.validate_connection():
+        if await self.spotify_importer.validate_connection():
             self.logger.info("Spotify connection validated")
             validation_results.append(True)
         else:
@@ -361,32 +366,33 @@ class PeriodeecApplication:
         
         return all(validation_results)
     
-    def sync_playlist(self, playlist_config, playlist_name: str) -> bool:
+    async def sync_playlist(self, playlist_config, playlist_name: str) -> bool:
         """Sync a single playlist."""
         try:
             self.logger.info(f"Starting sync for playlist: {playlist_name}")
             start_time = time.time()
             
-            # Get playlist info from Spotify
-            playlist_info = self.spotify_handler.get_playlist_info(playlist_config.url)
-            if not playlist_info:
-                self.logger.error(f"Could not fetch playlist info for {playlist_name}")
+            # Create playlist object from config (we'll get tracks to determine count)
+            playlist_title = playlist_config.title or playlist_name
+            playlist_path = os.path.join(self.config.paths.playlists, f"{playlist_name}.json")
+
+            # Get tracks first to determine actual count
+            tracks = await self.spotify_importer.get_playlist_tracks(playlist_config.url)
+
+            if not tracks:
+                self.logger.warning(f"No tracks found for playlist: {playlist_title}")
                 return False
-            
-            # Create playlist object
-            playlist_title = playlist_config.title or playlist_info.get('name', playlist_name)
-            playlist_path = os.path.join(self.config.paths.playlists, f"{playlist_info.get('id', playlist_name)}.json")
-            
+
             playlist = Playlist(
                 title=playlist_title,
                 tracks=[],
-                id=playlist_info.get('id', ''),
+                id=self.spotify_importer._extract_playlist_id(playlist_config.url) or playlist_name,
                 path=playlist_path,
-                number_of_tracks=playlist_info.get('tracks', {}).get('total', 0),
-                description=playlist_config.summary or playlist_info.get('description', ''),
-                snapshot_id=playlist_info.get('snapshot_id', ''),
-                poster=playlist_config.poster or (playlist_info.get('images', [{}])[0].get('url', '') if playlist_info.get('images') else ''),
-                summary=playlist_config.summary or playlist_info.get('description', ''),
+                number_of_tracks=len(tracks),
+                description=playlist_config.summary or '',
+                snapshot_id='',
+                poster=playlist_config.poster or '',
+                summary=playlist_config.summary or '',
                 url=playlist_config.url
             )
             
@@ -407,13 +413,8 @@ class PeriodeecApplication:
                 
                 return success
             
-            # Fetch tracks
-            self.logger.info(f"Fetching tracks for playlist: {playlist_title}")
-            tracks = self.spotify_handler.tracks(playlist_config.url, playlist.number_of_tracks)
-            
-            if not tracks:
-                self.logger.warning(f"No tracks found for playlist: {playlist_title}")
-                return False
+            # Use tracks already fetched above
+            self.logger.info(f"Processing {len(tracks)} tracks for playlist: {playlist_title}")
             
             # Update tracklist
             playlist.tracks = playlist.update_tracklist(tracks, playlist.tracks)
@@ -539,20 +540,20 @@ class PeriodeecApplication:
             self.logger.error(f"Failed to sync to Plex: {e}")
             return False
     
-    def sync_user(self, user_config, username: str) -> bool:
+    async def sync_user(self, user_config, username: str) -> bool:
         """Sync all playlists for a user."""
         try:
             self.logger.info(f"Starting user sync: {username}")
             start_time = time.time()
             
             # Get user info
-            spotify_user = self.spotify_handler.user(user_config.spotify_username)
-            
+            spotify_user = await self.spotify_importer.get_user_info(user_config.spotify_username)
+
             # Get playlists
-            playlists = self.spotify_handler.playlists(
-                username=user_config.spotify_username,
-                include_collaborative=user_config.include_collaborative,
-                include_followed=user_config.include_followed
+            playlists = await self.spotify_importer.get_user_playlists(
+                user_id=user_config.spotify_username,
+                include_collaborative=getattr(user_config, 'include_collaborative', True),
+                include_followed=getattr(user_config, 'include_followed', False)
             )
             
             if not playlists:
@@ -577,7 +578,7 @@ class PeriodeecApplication:
                     'poster': None
                 })()
                 
-                if self.sync_playlist(temp_config, f"{username}_{playlist.title}"):
+                if await self.sync_playlist(temp_config, f"{username}_{playlist.title}"):
                     success_count += 1
             
             sync_time = time.time() - start_time
@@ -628,7 +629,7 @@ class PeriodeecApplication:
             if self.config.advanced.statistics_file:
                 stats_data = {
                     'application': self.stats.to_dict(),
-                    'spotify': self.spotify_handler.get_stats() if self.spotify_handler else {},
+                    'spotify': self.spotify_importer.get_service_stats() if self.spotify_importer else {},
                     'downloads': self.download_manager.get_stats().to_dict() if self.download_manager else {},
                     'beets': self.beets_handler.get_library_stats() if self.beets_handler else {}
                 }
@@ -640,13 +641,13 @@ class PeriodeecApplication:
         except Exception as e:
             self.logger.error(f"Failed to save statistics: {e}")
     
-    def _health_check(self):
+    async def _health_check(self):
         """Perform health check on all components."""
         try:
             self.logger.info("Performing health check")
             
             # Check Spotify connection
-            if not self.spotify_handler.validate_connection():
+            if not await self.spotify_importer.validate_connection():
                 self.logger.warning("Spotify connection health check failed")
                 self.stats.record_error('health_check_spotify')
             
@@ -667,7 +668,7 @@ class PeriodeecApplication:
         except Exception as e:
             self.logger.error(f"Health check failed: {e}")
     
-    def run_once(self) -> bool:
+    async def run_once(self) -> bool:
         """Run all sync operations once."""
         self.logger.info("Running one-time sync")
         
@@ -675,12 +676,12 @@ class PeriodeecApplication:
         
         # Sync playlists
         for name, playlist_config in self.config.get_enabled_playlists().items():
-            if not self.sync_playlist(playlist_config, name):
+            if not await self.sync_playlist(playlist_config, name):
                 success = False
         
         # Sync users
         for name, user_config in self.config.get_enabled_users().items():
-            if not self.sync_user(user_config, name):
+            if not await self.sync_user(user_config, name):
                 success = False
         
         return success
@@ -713,8 +714,8 @@ class PeriodeecApplication:
         print(f"Tracks downloaded: {self.stats.total_tracks_downloaded}")
         print(f"Playlists synced: {self.stats.total_playlists_synced}")
         
-        if self.spotify_handler:
-            self.spotify_handler.print_stats()
+        if self.spotify_importer:
+            self.spotify_importer.print_stats()
         
         if self.download_manager:
             self.download_manager.print_stats()
@@ -825,7 +826,7 @@ def main():
         # Initialize application
         app = PeriodeecApplication(args.config)
         
-        if not app.initialize():
+        if not asyncio.run(app.initialize()):
             print("Failed to initialize application", file=sys.stderr)
             return 1
         
@@ -854,7 +855,7 @@ def main():
         # Handle run modes
         if args.once:
             app.logger.info("Running in one-time sync mode")
-            success = app.run_once()
+            success = asyncio.run(app.run_once())
             app.print_status()
             return 0 if success else 1
         
