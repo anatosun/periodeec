@@ -87,9 +87,10 @@ class ListenBrainzImporter(MusicServiceImporter):
             AuthenticationError: If authentication fails
         """
         try:
-            # Test the connection
+            # Test the connection with a simple endpoint
             self._rate_limit_wait()
-            response = self.session.get(f"{self.api_base}/stats/sitewide/artists")
+            # Use a more basic endpoint that's less likely to change
+            response = self.session.get(f"{self.server_url}/1/status/get-dump-info")
             response.raise_for_status()
 
             # Test user token if provided
@@ -122,7 +123,7 @@ class ListenBrainzImporter(MusicServiceImporter):
         """
         try:
             self._rate_limit_wait()
-            response = self.session.get(f"{self.api_base}/stats/sitewide/artists")
+            response = self.session.get(f"{self.server_url}/1/status/get-dump-info")
             return response.status_code == 200
         except Exception as e:
             self.logger.error(f"ListenBrainz connection validation failed: {e}")

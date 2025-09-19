@@ -346,9 +346,9 @@ class PeriodeecApplication:
                     }
                     self.lastfm_importer = LastFMImporter(lastfm_importer_config)
                     await self.lastfm_importer.authenticate()
-                    logger.info("Last.fm importer initialized successfully")
+                    self.logger.info("Last.fm importer initialized successfully")
                 except Exception as e:
-                    logger.warning(f"Failed to initialize Last.fm importer: {e}")
+                    self.logger.warning(f"Failed to initialize Last.fm importer: {e}")
                     self.lastfm_importer = None
 
             # Initialize ListenBrainz importer if enabled
@@ -366,9 +366,9 @@ class PeriodeecApplication:
                     }
                     self.listenbrainz_importer = ListenBrainzImporter(listenbrainz_importer_config)
                     await self.listenbrainz_importer.authenticate()
-                    logger.info("ListenBrainz importer initialized successfully")
+                    self.logger.info("ListenBrainz importer initialized successfully")
                 except Exception as e:
-                    logger.warning(f"Failed to initialize ListenBrainz importer: {e}")
+                    self.logger.warning(f"Failed to initialize ListenBrainz importer: {e}")
                     self.listenbrainz_importer = None
 
             # Initialize Plex handler
