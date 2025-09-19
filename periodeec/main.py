@@ -294,7 +294,7 @@ class PeriodeecApplication:
             self.beets_handler = BeetsHandler(
                 library=self.config.beets.library,
                 directory=self.config.beets.directory,
-                failed_path=self.config.settings.failed,
+                failed_path=self.config.paths.failed,
                 plex_baseurl=self.config.plex.baseurl,
                 plex_token=self.config.plex.token,
                 plex_section=self.config.plex.section,
