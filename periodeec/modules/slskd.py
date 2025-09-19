@@ -161,6 +161,7 @@ class Slskd(Downloader):
                         results.append({
                             'username': username,
                             'filename': filename,
+                            'path': file_info.get('filename', ''),  # Full path from slskd
                             'size': file_info.get('size', 0),
                             'quality_info': quality_info,
                             'speed': response.get('uploadSpeed', 0)
@@ -181,15 +182,56 @@ class Slskd(Downloader):
     def _meets_criteria(self, result: Dict[str, Any], artist: str, album: str) -> bool:
         """Check if result meets basic matching criteria."""
         filename = result['filename'].lower()
+        full_path = result.get('path', filename).lower()
 
-        # Simple string matching
-        artist_match = not artist or artist.lower() in filename
-        album_match = not album or album.lower() in filename
+        # Check if this is a quality audio file
+        ext = filename.split('.')[-1] if '.' in filename else ''
+        is_audio_file = ext in ['flac', 'mp3', 'm4a', 'wav', 'alac', 'ape']
 
-        return artist_match and album_match
+        if not is_audio_file:
+            return False
+
+        # If artist is specified, it should match somewhere in the path
+        if artist:
+            artist_lower = artist.lower()
+            if not (artist_lower in filename or artist_lower in full_path):
+                return False
+
+        # Album matching with fallback logic:
+        # 1. Direct album match in path
+        # 2. Album words in path
+        # 3. If we have artist match + quality audio file, let beets decide
+        if album:
+            album_lower = album.lower()
+            album_words = [word for word in album_lower.split() if len(word) > 2]
+
+            album_match = (album_lower in full_path or
+                          any(word in full_path for word in album_words))
+
+            # Fallback: if folder structure suggests album + we have quality files,
+            # trust that beets will sort it out during import
+            if not album_match and artist and is_audio_file:
+                return True
+
+        return True
 
     def _sort_results(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Sort results by quality preference."""
+        """Sort results by quality preference, prioritizing complete albums."""
+        from collections import defaultdict
+
+        # Group by folder/directory to identify potential albums
+        folder_groups = defaultdict(list)
+        for result in results:
+            # Extract folder path (everything before the filename)
+            full_path = result.get('path', result['filename'])
+            if '/' in full_path:
+                folder = '/'.join(full_path.split('/')[:-1])
+            elif '\\' in full_path:
+                folder = '\\'.join(full_path.split('\\')[:-1])
+            else:
+                folder = 'root'
+            folder_groups[folder].append(result)
+
         def quality_key(result):
             quality_info = result['quality_info']
             format_pref = 0
@@ -206,7 +248,12 @@ class Slskd(Downloader):
             elif quality_info['format'] == 'mp3':
                 format_pref = 60
 
-            return (format_pref, quality_info['bitrate'], result.get('speed', 0))
+            # Bonus for being part of a multi-track album (3+ tracks suggests complete album)
+            folder_path = result.get('path', result['filename'])
+            folder = '/'.join(folder_path.split('/')[:-1]) if '/' in folder_path else folder_path
+            album_bonus = 20 if len(folder_groups.get(folder, [])) >= 3 else 0
+
+            return (format_pref + album_bonus, quality_info['bitrate'], result.get('speed', 0))
 
         return sorted(results, key=quality_key, reverse=True)
 
@@ -240,6 +287,9 @@ class Slskd(Downloader):
         for result in results:
             if self._meets_criteria(result, artist, album):
                 good_results.append(result)
+            else:
+                # Debug: log why results were filtered out
+                self._logger.debug(f"Filtered out: {result['filename']} (artist: {artist}, album: {album})")
 
         if not good_results:
             return MatchResult(MatchQuality.NO_MATCH,
