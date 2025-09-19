@@ -98,6 +98,16 @@ class Track:
         self.spotify_id: str = kwargs.get('spotify_id', '').strip()
         self.musicbrainz_id: str = kwargs.get('musicbrainz_id', '').strip()
         self.musicbrainz_recording_id: str = kwargs.get('musicbrainz_recording_id', '').strip()
+
+        # Multi-service support
+        self.lastfm_url: str = kwargs.get('lastfm_url', '').strip()
+        self.listenbrainz_recording_mbid: str = kwargs.get('listenbrainz_recording_mbid', '').strip()
+        self.import_source: str = kwargs.get('import_source', '').strip()
+
+        # Playback statistics
+        self.play_count: int = kwargs.get('play_count', 0)
+        self.last_played: Optional[datetime] = kwargs.get('last_played', None)
+        self.loved_at: Optional[datetime] = kwargs.get('loved_at', None)
         
         # Audio metadata
         self.audio_metadata = AudioMetadata()
@@ -495,6 +505,10 @@ class User:
         # External service connections
         self.spotify_username = kwargs.get('spotify_username', id).strip()
         self.plex_usernames: List[str] = kwargs.get('plex_usernames', [])
+
+        # Multi-service support
+        self.lastfm_username: str = kwargs.get('lastfm_username', '').strip()
+        self.listenbrainz_username: str = kwargs.get('listenbrainz_username', '').strip()
         self.external_urls: Dict[str, str] = kwargs.get('external_urls', {})
         
         # Service URIs/IDs
