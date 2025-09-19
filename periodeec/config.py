@@ -320,7 +320,6 @@ class Config:
         self.config_dir = self.config_path.parent
         
         # Default configurations
-        self.spotify = SpotifyConfig()
         self.plex = PlexConfig()
         self.beets = BeetsConfig()
         self.paths = PathConfig()
@@ -329,6 +328,9 @@ class Config:
 
         # Multi-service importers configuration
         self.importers = ImportersConfig()
+
+        # Legacy backward compatibility - point to importers.spotify
+        self.spotify = self.importers.spotify
 
         # Collections
         self.downloaders: Dict[str, Union[QobuzConfig, SlskdConfig]] = {}
@@ -355,44 +357,46 @@ class Config:
             # Validate against schema
             self._validate_config(config_data)
             
-            # Load main configurations (support both new nested and legacy flat structure)
+            # Load main configurations using consistent structure
+            # Priority: settings.* (new format) -> root level.* (legacy format)
             settings_data = config_data.get('settings', {})
 
-            # Load configurations - check nested first, then root level for backwards compatibility
-            self._load_spotify_config(
-                settings_data.get('spotify', config_data.get('spotify', {}))
-            )
+            # Load core service configurations
             self._load_plex_config(
                 settings_data.get('plex', config_data.get('plex', {}))
             )
             self._load_beets_config(
                 settings_data.get('beets', config_data.get('beets', {}))
             )
-            # For paths, extract individual path settings from settings or use legacy paths section
+
+            # Load path configurations (extract from settings or use legacy paths section)
             paths_config = {}
             if settings_data:
                 # Extract path-related settings from settings section
-                path_fields = ['downloads', 'failed', 'temp', 'playlists']
+                path_fields = ['downloads', 'failed', 'playlists', 'm3u', 'cache']
                 for field in path_fields:
                     if field in settings_data:
                         paths_config[field] = settings_data[field]
-            else:
-                # Legacy format - check for paths section
+            if not paths_config:  # Fallback to legacy paths section
                 paths_config = config_data.get('paths', {})
 
             self._load_paths_config(paths_config)
+
+            # Load logging configuration
             self._load_logging_config(
                 settings_data.get('logging', config_data.get('logging', {}))
             )
+
+            # Load advanced configuration
             self._load_advanced_config(
                 config_data.get('advanced', {})
             )
 
-            # Load importers configuration (supports both new format and legacy)
+            # Load importers configuration
             importers_config = config_data.get('importers', {})
-            if not importers_config:
-                # Legacy format - services at root level
-                importers_config = config_data
+            # For backward compatibility, also check root level spotify config
+            if 'spotify' in config_data and 'spotify' not in importers_config:
+                importers_config['spotify'] = config_data['spotify']
             self._load_importers_config(importers_config)
             
             # Load downloader configurations
@@ -434,10 +438,6 @@ class Config:
             
         except jsonschema.ValidationError as e:
             raise ConfigurationError(f"Configuration validation failed: {e.message}")
-    
-    def _load_spotify_config(self, config: Dict[str, Any]):
-        """Load Spotify configuration."""
-        self.spotify = SpotifyConfig(**config)
     
     def _load_plex_config(self, config: Dict[str, Any]):
         """Load Plex configuration."""
@@ -504,7 +504,20 @@ class Config:
         """Load user configurations."""
         for name, user_config in config.items():
             if user_config.get('enabled', True):
-                self.users[name] = UserConfig(**user_config)
+                # Handle nested objects properly
+                user_dict = user_config.copy()
+
+                # Extract and instantiate service_connections if present
+                if 'service_connections' in user_dict:
+                    service_connections_data = user_dict.pop('service_connections')
+                    user_dict['service_connections'] = ServiceConnections(**service_connections_data)
+
+                # Extract and instantiate import_preferences if present
+                if 'import_preferences' in user_dict:
+                    import_preferences_data = user_dict.pop('import_preferences')
+                    user_dict['import_preferences'] = ImportPreferences(**import_preferences_data)
+
+                self.users[name] = UserConfig(**user_dict)
     
     def _resolve_paths(self):
         """Resolve relative paths to absolute paths."""

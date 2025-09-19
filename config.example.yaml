@@ -1,49 +1,52 @@
 # Periodeec Configuration Example
-# This file demonstrates all available configuration options for the multi-service music sync system
-# Core application settings
+# This configuration file matches the actual Config class structure in config.py
+
+# Core service settings
 settings:
+  # Plex Media Server configuration
+  plex:
+    baseurl: "http://localhost:32400"
+    token: "YOUR_PLEX_TOKEN"
+    section: "Music"
+    verify_ssl: true
+    timeout: 30
+    retry_attempts: 3
+
   # Beets music library configuration
   beets:
-    library: /app/music/library.blb
-    directory: /app/music
+    library: "./library.db"
+    directory: "./music"
     plugins: ["spotify", "plexupdate"]
     fuzzy: false
     auto_import: true
     strong_rec_thresh: 0.15
     timid: false
-    duplicate_action: skip # skip, keep, remove
+    duplicate_action: "skip"  # skip, keep, remove
 
-  # Directory structure
-  downloads: /app/downloads
-  failed: /app/failed
-  playlists: /app/playlists
-
-  # Plex Media Server
-  plex:
-    baseurl: http://plex-server:32400
-    token: YOUR_PLEX_TOKEN
-    section: Music
-    verify_ssl: true
-    timeout: 30
-    retry_attempts: 3
+  # Directory paths
+  downloads: "./downloads"
+  failed: "./failed"
+  playlists: "./playlists"
+  m3u: "./m3u"
+  cache: "./cache"
 
   # Logging configuration
   logging:
-    level: INFO
+    level: "INFO"
     format: "%(asctime)s - %(levelname)s - %(name)s - %(message)s"
-    file: /app/logs/periodeec.log
+    file: null  # Set to path for file logging
     max_size_mb: 100
     backup_count: 5
     console: true
     color: true
 
-# Multi-service importer configuration
+# Music service importers
 importers:
-  # Spotify configuration
+  # Spotify importer
   spotify:
     enabled: true
-    client_id: YOUR_SPOTIFY_CLIENT_ID
-    client_secret: YOUR_SPOTIFY_CLIENT_SECRET
+    client_id: "YOUR_SPOTIFY_CLIENT_ID"
+    client_secret: "YOUR_SPOTIFY_CLIENT_SECRET"
     anonymous: true  # Set to false and provide credentials for full access
     cache_enabled: true
     cache_ttl_hours: 24
@@ -53,177 +56,129 @@ importers:
     include_collaborative: true
     include_followed: false
     add_source_to_titles: false
-    source_tag_format: "(Spotify)"
+    source_tag_format: "({service})"
 
-  # Last.FM configuration
+  # Last.FM importer
   lastfm:
     enabled: false  # Set to true and provide credentials to enable
-    api_key: YOUR_LASTFM_API_KEY
-    api_secret: YOUR_LASTFM_API_SECRET
+    api_key: "YOUR_LASTFM_API_KEY"
+    api_secret: "YOUR_LASTFM_API_SECRET"
     rate_limit_rpm: 200
     add_source_to_titles: false
-    source_tag_format: "(Last.FM)"
+    source_tag_format: "({service})"
     default_limit: 50
     max_retries: 3
     include_top_tracks: true
     include_loved_tracks: true
-    top_tracks_periods:
-      - overall
-      - 12month
-      - 6month
-      - 3month
+    top_tracks_periods: ["overall", "12month", "6month", "3month"]
 
-  # ListenBrainz configuration
+  # ListenBrainz importer
   listenbrainz:
     enabled: false  # Set to true to enable
-    user_token: YOUR_LISTENBRAINZ_TOKEN # Optional for public data
-    server_url: https://listenbrainz.org
+    user_token: "YOUR_LISTENBRAINZ_TOKEN"  # Optional for public data
+    server_url: "https://listenbrainz.org"
     rate_limit_rpm: 60
     add_source_to_titles: false
-    source_tag_format: "(ListenBrainz)"
+    source_tag_format: "({service})"
     default_limit: 100
     max_retries: 3
     include_top_artists: true
     include_recent_listens: true
 
-# Download source configuration
+# Download services
 downloaders:
   # Qobuz high-quality downloads
   qobuz:
     enabled: false  # Set to true and provide credentials to enable
-    email: YOUR_QOBUZ_EMAIL
-    password: YOUR_QOBUZ_PASSWORD
-    quality: 27 # 5=MP3_320, 6=FLAC, 7=24-Bit, 27=Hi-Res
+    name: "qobuz"
+    email: "YOUR_QOBUZ_EMAIL"
+    password: "YOUR_QOBUZ_PASSWORD"
+    quality: 27  # 27=Hi-Res, 7=Lossless, 6=CD, 5=MP3 320
+    embed_art: true
+    cover_og_quality: false
     priority: 10
-    max_retries: 3
     timeout: 300
-    search_strategy: comprehensive
 
   # Soulseek P2P via slskd
   slskd:
-    enabled: false  # Set to true and provide credentials to enable
-    host: localhost
+    enabled: false  # Set to true and provide configuration to enable
+    name: "slskd"
+    host: "localhost"
     port: 5030
-    api_key: YOUR_SLSKD_API_KEY
-    username: your_slsk_username
-    password: your_slsk_password
+    api_key: "YOUR_SLSKD_API_KEY"
+    username: "your_slsk_username"
+    password: "your_slsk_password"
+    use_https: false
+    max_results: 100
     min_bitrate: 320
+    preferred_formats: ["flac", "alac", "mp3", "m4a"]
     priority: 30
-    max_retries: 5
-    search_timeout: 60
-    download_timeout: 600
-    min_file_size_mb: 1
-    max_file_size_mb: 100
+    timeout: 300
 
-# User configuration with multi-service support
+# User configurations
 users:
-  # Example user with all services configured
+  # Example user with new multi-service structure
   alice:
-    enabled: true
-
     # Service connections
     service_connections:
-      spotify_username: alice_spotify_id
-      lastfm_username: alice_lastfm
-      listenbrainz_username: alice_listenbrainz
+      spotify_username: "alice_spotify_id"
+      lastfm_username: "alice_lastfm"
+      listenbrainz_username: "alice_listenbrainz"
 
     # Import preferences
     import_preferences:
-      primary_service: spotify
-      enabled_services:
-        - spotify
-        - lastfm
-        - listenbrainz
-
-      # Service-specific preferences
+      primary_service: "spotify"
+      enabled_services: ["spotify"]
       spotify:
         include_collaborative: true
         include_followed: false
-
       lastfm:
         include_top_tracks: true
         include_loved_tracks: true
-        top_tracks_periods: [overall, 12month]
-
+        top_tracks_periods: ["overall", "12month"]
       listenbrainz:
         include_top_artists: true
         include_recent_listens: true
 
     # Plex sync settings
-    sync_to_plex_users:
-      - alice@example.com
-
-    # Download and sync preferences
+    sync_to_plex_users: ["alice@example.com"]
     download_missing: true
     create_m3u: true
-    schedule_minutes: 1440 # 24 hours
+    schedule_minutes: 1440  # 24 hours
+    enabled: true
     overwrite: true
 
-  # Example user with only Spotify
+  # Example user with legacy structure (backward compatibility)
   bob:
-    enabled: true
-
-    service_connections:
-      spotify_username: bob_spotify_id
-
-    import_preferences:
-      primary_service: spotify
-      enabled_services: [spotify]
-      spotify:
-        include_collaborative: false
-        include_followed: true
-
-    sync_to_plex_users:
-      - bob@example.com
-
+    spotify_username: "bob_spotify_id"  # Legacy field
+    include_collaborative: false
+    include_followed: true
+    sync_to_plex_users: ["bob@example.com"]
     download_missing: false
     create_m3u: true
-    schedule_minutes: 2880 # 48 hours
-
-  # Example user with Last.FM focus
-  charlie:
+    schedule_minutes: 2880  # 48 hours
     enabled: true
+    overwrite: true
 
-    service_connections:
-      lastfm_username: charlie_lastfm
-      spotify_username: charlie_spotify_id # For downloading
-
-    import_preferences:
-      primary_service: lastfm
-      enabled_services: [lastfm, spotify]
-      lastfm:
-        include_top_tracks: true
-        include_loved_tracks: true
-        top_tracks_periods: [overall, 6month]
-
-    sync_to_plex_users:
-      - charlie@example.com
-
-    download_missing: true
-    create_m3u: false
-    schedule_minutes: 720 # 12 hours
-
-# Playlist-specific configuration (optional)
+# Playlist configurations (optional)
 playlists:
   discover_weekly:
-    url: spotify:playlist:37i9dQZEVXcBTWulkq8iHy
+    url: "spotify:playlist:37i9dQZEVXcBTWulkq8iHy"
     title: "Discover Weekly"
+    sync_mode: "playlist"
+    sync_to_plex_users: ["alice@example.com"]
+    download_missing: true
+    create_m3u: true
     summary: "Spotify's weekly music discovery"
     poster: ""
-    schedule_minutes: 10080 # Weekly
+    schedule_minutes: 10080  # Weekly
     enabled: true
+    overwrite: true
 
-  top_tracks_2024:
-    url: lastfm:user:alice_lastfm:toptracks:12month
-    title: "My Top Tracks 2024"
-    summary: "Last.FM top tracks from the past year"
-    schedule_minutes: 1440 # Daily
-    enabled: true
-
-# Collection configuration (optional)
+# Collection configurations (optional)
 collections:
   liked_songs:
-    url: ""
+    url: "spotify:collection:tracks"  # Special URL for liked songs collection
     title: "Liked Songs"
     download_missing: true
     summary: "All liked songs from various services"
@@ -242,4 +197,3 @@ advanced:
   rate_limit_buffer: 1.2
   retry_failed_after_hours: 24
   health_check_interval_minutes: 60
-
