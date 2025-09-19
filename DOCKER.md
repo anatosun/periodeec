@@ -47,6 +47,20 @@ This guide covers the improved Docker setup for Periodeec with security best pra
 
 ## Docker Compose Features
 
+### Command Line Arguments
+
+The Periodeec application supports several command-line arguments that can be used with Docker:
+
+| Argument | Description | Docker Usage |
+|----------|-------------|--------------|
+| `--run` | Continuous scheduled mode (default) | `docker run ... periodeec:latest --run` |
+| `--once` | Run sync once and exit | `docker run --rm ... periodeec:latest --once` |
+| `--status` | Show status and exit | `docker run --rm ... periodeec:latest --status` |
+| `--validate-config` | Validate configuration and exit | `docker run --rm ... periodeec:latest --validate-config` |
+| `--config-example` | Generate example config | `docker run --rm ... periodeec:latest --config-example` |
+| `--config /path` | Custom config path | Mounted volume path |
+| `--log-level LEVEL` | Override log level | `docker run ... periodeec:latest --run --log-level DEBUG` |
+
 ### Service Profiles
 Enable optional services using profiles:
 
@@ -94,16 +108,54 @@ COMPOSE_PROFILES=plex,downloaders docker-compose -f docker-compose.improved.yml 
 
 ## Usage Examples
 
-### Basic Deployment
+### Scheduled Mode (Default)
 ```bash
-# Start Periodeec only
-docker-compose -f docker-compose.improved.yml up -d
+# Start Periodeec in continuous scheduled mode
+docker-compose up -d
+
+# Or explicitly specify scheduled mode
+docker run -d --name periodeec \
+  -v ./config:/config:ro \
+  -v ./music:/data/music \
+  ghcr.io/anatosun/periodeec:latest --run
+```
+
+### One-Time Sync
+```bash
+# Run sync once and exit
+COMPOSE_PROFILES=once docker-compose up periodeec-once
+
+# Or with docker run
+docker run --rm \
+  -v ./config:/config:ro \
+  -v ./music:/data/music \
+  ghcr.io/anatosun/periodeec:latest --once
+```
+
+### Status Check
+```bash
+# Check current status
+COMPOSE_PROFILES=status docker-compose up periodeec-status
+
+# Or with docker run
+docker run --rm \
+  -v ./config:/config:ro \
+  -v ./music:/data/music:ro \
+  ghcr.io/anatosun/periodeec:latest --status
+```
+
+### Configuration Validation
+```bash
+# Validate configuration
+docker run --rm \
+  -v ./config:/config:ro \
+  ghcr.io/anatosun/periodeec:latest --validate-config
 ```
 
 ### Full Stack Deployment
 ```bash
 # Start with Plex and download services
-COMPOSE_PROFILES=plex,downloaders docker-compose -f docker-compose.improved.yml up -d
+COMPOSE_PROFILES=plex,downloaders docker-compose up -d
 ```
 
 ### Development Mode

@@ -1,15 +1,16 @@
 version: '3.8'
 
 services:
+  # Default service - runs in scheduled mode
   periodeec:
     build:
       context: .
-      dockerfile: Dockerfile.improved
       args:
         PUID: ${PUID:-1000}
         PGID: ${PGID:-1000}
     container_name: periodeec
     restart: unless-stopped
+    command: ["--run"]  # Scheduled mode (default)
 
     # Environment variables
     environment:
@@ -98,6 +99,62 @@ services:
 
     profiles:
       - plex
+
+  # One-time sync service - runs once and exits
+  periodeec-once:
+    build:
+      context: .
+      args:
+        PUID: ${PUID:-1000}
+        PGID: ${PGID:-1000}
+    container_name: periodeec-once
+    restart: "no"
+    command: ["--once"]
+
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-UTC}
+      - PERIODEEC_LOG_LEVEL=${LOG_LEVEL:-INFO}
+
+    volumes:
+      - ./config:/config:ro
+      - ./music:/data/music
+      - ./downloads:/data/downloads
+      - ./failed:/data/failed
+      - cache_data:/cache
+
+    networks:
+      - periodeec-network
+
+    profiles:
+      - once
+
+  # Status check service
+  periodeec-status:
+    build:
+      context: .
+      args:
+        PUID: ${PUID:-1000}
+        PGID: ${PGID:-1000}
+    container_name: periodeec-status
+    restart: "no"
+    command: ["--status"]
+
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-UTC}
+
+    volumes:
+      - ./config:/config:ro
+      - ./music:/data/music:ro
+
+    networks:
+      - periodeec-network
+
+    profiles:
+      - status
 
   # Optional: slskd for Soulseek downloads
   slskd:

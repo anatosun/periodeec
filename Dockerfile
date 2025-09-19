@@ -89,6 +89,7 @@ EXPOSE 8080
 
 # Set up signal handling and use exec form for proper signal propagation
 ENTRYPOINT ["python", "-m", "periodeec.main"]
+# Default to scheduled mode, but allow overriding via docker run arguments
 CMD ["--run"]
 
 # Labels for better maintainability
