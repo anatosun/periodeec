@@ -626,7 +626,7 @@ class PeriodeecApplication:
     def _save_statistics(self):
         """Save application statistics."""
         try:
-            if self.config.advanced.statistics_file:
+            if self.config and self.config.advanced.statistics_file:
                 stats_data = {
                     'application': self.stats.to_dict(),
                     'spotify': self.spotify_importer.get_service_stats() if self.spotify_importer else {},
