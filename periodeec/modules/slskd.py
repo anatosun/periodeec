@@ -202,8 +202,40 @@ class Slskd(Downloader):
         # If artist is specified, it should match somewhere in the path
         if artist:
             artist_lower = artist.lower()
-            if not (artist_lower in filename or artist_lower in full_path):
-                return False
+            # Check for exact match first
+            if artist_lower in filename or artist_lower in full_path:
+                pass  # Found exact match
+            else:
+                # Try common variations: spaces -> dots, underscores, etc.
+                artist_variations = [
+                    artist_lower.replace(' ', '.'),
+                    artist_lower.replace(' ', '_'),
+                    artist_lower.replace(' ', '-'),
+                    artist_lower.replace(' ', ''),
+                    # Also try the reverse - dots/underscores to spaces
+                    artist_lower.replace('.', ' '),
+                    artist_lower.replace('_', ' '),
+                    artist_lower.replace('-', ' ')
+                ]
+
+                # Also create variations from the path artist name back to search term
+                path_variations = []
+                for path_part in [filename, full_path]:
+                    if '/' in path_part:
+                        path_parts = path_part.split('/')
+                        for part in path_parts:
+                            if part:
+                                path_variations.extend([
+                                    part.replace('.', ' '),
+                                    part.replace('_', ' '),
+                                    part.replace('-', ' ')
+                                ])
+
+                artist_found = (any(var in full_path or var in filename for var in artist_variations) or
+                               any(artist_lower in var.lower() for var in path_variations))
+
+                if not artist_found:
+                    return False
 
         # Album matching with fallback logic:
         # 1. Direct album match in path
@@ -297,9 +329,10 @@ class Slskd(Downloader):
         for result in results:
             if self._meets_criteria(result, artist, album):
                 good_results.append(result)
+                self._logger.debug(f"✓ Accepted: {result['filename']} (path: {result.get('path', 'N/A')})")
             else:
                 # Debug: log why results were filtered out
-                self._logger.debug(f"Filtered out: {result['filename']} (artist: {artist}, album: {album})")
+                self._logger.debug(f"✗ Filtered out: {result['filename']} (path: {result.get('path', 'N/A')}) - artist: {artist}, album: {album}")
 
         self._logger.debug(f"After filtering: {len(good_results)} results matched criteria")
 
@@ -346,13 +379,43 @@ class Slskd(Downloader):
         session = self._get_session()
 
         try:
-            # Initiate download
+            # Try different endpoint variations for slskd API
             download_data = {'username': username, 'files': [filename]}
 
-            resp = session.post(f"{self.base_url}/transfers/downloads",
-                              json=download_data, timeout=self.timeout)
-            if resp.status_code != 201:
+            # Try the main downloads endpoint first
+            endpoint = f"{self.base_url}/transfers/downloads"
+            self._logger.debug(f"Attempting download POST to: {endpoint}")
+            self._logger.debug(f"Download payload: {download_data}")
+
+            resp = session.post(endpoint, json=download_data, timeout=self.timeout)
+
+            # If we get 405, try alternate endpoint formats
+            if resp.status_code == 405:
+                self._logger.debug(f"405 Method Not Allowed, trying alternate endpoints...")
+
+                # Try without the transfers prefix
+                alternate_endpoint = f"{self.base_url}/downloads"
+                self._logger.debug(f"Trying alternate endpoint: {alternate_endpoint}")
+                resp = session.post(alternate_endpoint, json=download_data, timeout=self.timeout)
+
+                # Try with different payload format
+                if resp.status_code == 405:
+                    alt_payload = {'user': username, 'file': filename}
+                    self._logger.debug(f"Trying different payload format: {alt_payload}")
+                    resp = session.post(endpoint, json=alt_payload, timeout=self.timeout)
+
+                    if resp.status_code == 405:
+                        # Try with URL encoding instead of JSON
+                        import urllib.parse
+                        url_data = urllib.parse.urlencode(download_data)
+                        self._logger.debug(f"Trying URL-encoded data: {url_data}")
+                        resp = session.post(endpoint, data=url_data,
+                                          headers={'Content-Type': 'application/x-www-form-urlencoded'},
+                                          timeout=self.timeout)
+
+            if resp.status_code not in [200, 201]:
                 self._logger.error(f"Download failed: {resp.status_code}")
+                self._logger.error(f"Response content: {resp.text}")
                 return False
 
             transfer_data = resp.json()
