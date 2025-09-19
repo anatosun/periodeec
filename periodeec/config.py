@@ -4,8 +4,6 @@ import logging
 from typing import Dict, Any, List, Optional, Union
 from dataclasses import dataclass, field
 from pathlib import Path
-import jsonschema
-from jsonschema import validate
 
 logger = logging.getLogger(__name__)
 
@@ -215,11 +213,6 @@ class UserConfig:
     enabled: bool = True
     overwrite: bool = True
 
-    # Legacy support (deprecated, use service_connections.spotify_username)
-    spotify_username: str = ""
-    include_collaborative: bool = True
-    include_followed: bool = False
-
 
 @dataclass
 class LoggingConfig:
@@ -252,62 +245,7 @@ class ConfigurationError(Exception):
 
 
 class Config:
-    """Configuration system with validation and schema support."""
-    
-    # Configuration schema for validation
-    CONFIG_SCHEMA = {
-        "type": "object",
-        "properties": {
-            "spotify": {
-                "type": "object",
-                "properties": {
-                    "client_id": {"type": "string"},
-                    "client_secret": {"type": "string"},
-                    "anonymous": {"type": "boolean"}
-                }
-            },
-            "plex": {
-                "type": "object",
-                "required": ["baseurl", "token"],
-                "properties": {
-                    "baseurl": {"type": "string", "format": "uri"},
-                    "token": {"type": "string", "minLength": 1},
-                    "section": {"type": "string"}
-                }
-            },
-            "beets": {
-                "type": "object",
-                "properties": {
-                    "library": {"type": "string"},
-                    "directory": {"type": "string"},
-                    "plugins": {
-                        "type": "array",
-                        "items": {"type": "string"}
-                    }
-                }
-            },
-            "downloaders": {
-                "type": "object",
-                "properties": {
-                    "qobuz": {
-                        "type": "object",
-                        "properties": {
-                            "email": {"type": "string", "format": "email"},
-                            "password": {"type": "string"},
-                            "quality": {"type": "integer", "minimum": 5, "maximum": 27}
-                        }
-                    },
-                    "slskd": {
-                        "type": "object",
-                        "properties": {
-                            "host": {"type": "string"},
-                            "port": {"type": "integer", "minimum": 1, "maximum": 65535}
-                        }
-                    }
-                }
-            }
-        }
-    }
+    """Configuration system for periodeec application."""
     
     def __init__(self, config_path: str = "config/config.yaml"):
         """
@@ -328,9 +266,6 @@ class Config:
 
         # Multi-service importers configuration
         self.importers = ImportersConfig()
-
-        # Legacy backward compatibility - point to importers.spotify
-        self.spotify = self.importers.spotify
 
         # Collections
         self.downloaders: Dict[str, Union[QobuzConfig, SlskdConfig]] = {}
@@ -394,9 +329,6 @@ class Config:
 
             # Load importers configuration
             importers_config = config_data.get('importers', {})
-            # For backward compatibility, also check root level spotify config
-            if 'spotify' in config_data and 'spotify' not in importers_config:
-                importers_config['spotify'] = config_data['spotify']
             self._load_importers_config(importers_config)
             
             # Load downloader configurations
@@ -416,28 +348,21 @@ class Config:
             raise ConfigurationError(f"Failed to load configuration: {e}")
     
     def _validate_config(self, config_data: Dict[str, Any]):
-        """Validate configuration against schema."""
-        try:
-            # Note: This is a simplified validation
-            # In practice, you'd want more comprehensive schema validation
+        """Validate essential configuration requirements."""
+        # Check for plex config in nested settings or root level
+        settings_data = config_data.get('settings', {})
+        has_plex = (
+            'plex' in settings_data or
+            'plex' in config_data
+        )
 
-            # Check for plex config in nested settings or root level
-            settings_data = config_data.get('settings', {})
-            has_plex = (
-                'plex' in settings_data or
-                'plex' in config_data
-            )
+        if not has_plex:
+            raise ConfigurationError("Required configuration section missing: plex (should be under 'settings' or at root level)")
 
-            if not has_plex:
-                raise ConfigurationError("Required configuration section missing: plex (should be under 'settings' or at root level)")
-            
-            # Validate Plex configuration
-            plex_config = settings_data.get('plex', config_data.get('plex', {}))
-            if not plex_config.get('baseurl') or not plex_config.get('token'):
-                raise ConfigurationError("Plex baseurl and token are required")
-            
-        except jsonschema.ValidationError as e:
-            raise ConfigurationError(f"Configuration validation failed: {e.message}")
+        # Validate Plex configuration
+        plex_config = settings_data.get('plex', config_data.get('plex', {}))
+        if not plex_config.get('baseurl') or not plex_config.get('token'):
+            raise ConfigurationError("Plex baseurl and token are required")
     
     def _load_plex_config(self, config: Dict[str, Any]):
         """Load Plex configuration."""
@@ -461,11 +386,9 @@ class Config:
 
     def _load_importers_config(self, config: Dict[str, Any]):
         """Load multi-service importers configuration."""
-        # Load Spotify configuration (backwards compatibility)
+        # Load Spotify configuration
         spotify_config = config.get('spotify', {})
         self.importers.spotify = SpotifyConfig(**spotify_config)
-        # Also set legacy attribute for backward compatibility
-        self.spotify = self.importers.spotify
 
         # Load Last.FM configuration
         lastfm_config = config.get('lastfm', {})
@@ -732,50 +655,51 @@ class Config:
         """Save current configuration to file."""
         try:
             config_data = {
-                'spotify': {
-                    'client_id': self.spotify.client_id,
-                    'client_secret': self.spotify.client_secret,
-                    'anonymous': self.spotify.anonymous,
-                    'cache_enabled': self.spotify.cache_enabled,
-                    'cache_ttl_hours': self.spotify.cache_ttl_hours,
-                    'rate_limit_rpm': self.spotify.rate_limit_rpm,
-                    'retry_attempts': self.spotify.retry_attempts,
-                    'request_timeout': self.spotify.request_timeout
-                },
-                'plex': {
-                    'baseurl': self.plex.baseurl,
-                    'token': self.plex.token,
-                    'section': self.plex.section,
-                    'verify_ssl': self.plex.verify_ssl,
-                    'timeout': self.plex.timeout,
-                    'retry_attempts': self.plex.retry_attempts
-                },
-                'beets': {
-                    'library': self.beets.library,
-                    'directory': self.beets.directory,
-                    'plugins': self.beets.plugins,
-                    'fuzzy': self.beets.fuzzy,
-                    'auto_import': self.beets.auto_import,
-                    'strong_rec_thresh': self.beets.strong_rec_thresh,
-                    'timid': self.beets.timid,
-                    'duplicate_action': self.beets.duplicate_action
-                },
-                'paths': {
-                    'config': self.paths.config,
+                'settings': {
+                    'plex': {
+                        'baseurl': self.plex.baseurl,
+                        'token': self.plex.token,
+                        'section': self.plex.section,
+                        'verify_ssl': self.plex.verify_ssl,
+                        'timeout': self.plex.timeout,
+                        'retry_attempts': self.plex.retry_attempts
+                    },
+                    'beets': {
+                        'library': self.beets.library,
+                        'directory': self.beets.directory,
+                        'plugins': self.beets.plugins,
+                        'fuzzy': self.beets.fuzzy,
+                        'auto_import': self.beets.auto_import,
+                        'strong_rec_thresh': self.beets.strong_rec_thresh,
+                        'timid': self.beets.timid,
+                        'duplicate_action': self.beets.duplicate_action
+                    },
                     'downloads': self.paths.downloads,
                     'failed': self.paths.failed,
                     'playlists': self.paths.playlists,
                     'm3u': self.paths.m3u,
-                    'cache': self.paths.cache
+                    'cache': self.paths.cache,
+                    'logging': {
+                        'level': self.logging.level,
+                        'format': self.logging.format,
+                        'file': self.logging.file,
+                        'max_size_mb': self.logging.max_size_mb,
+                        'backup_count': self.logging.backup_count,
+                        'console': self.logging.console,
+                        'color': self.logging.color
+                    }
                 },
-                'logging': {
-                    'level': self.logging.level,
-                    'format': self.logging.format,
-                    'file': self.logging.file,
-                    'max_size_mb': self.logging.max_size_mb,
-                    'backup_count': self.logging.backup_count,
-                    'console': self.logging.console,
-                    'color': self.logging.color
+                'importers': {
+                    'spotify': {
+                        'client_id': self.importers.spotify.client_id,
+                        'client_secret': self.importers.spotify.client_secret,
+                        'anonymous': self.importers.spotify.anonymous,
+                        'cache_enabled': self.importers.spotify.cache_enabled,
+                        'cache_ttl_hours': self.importers.spotify.cache_ttl_hours,
+                        'rate_limit_rpm': self.importers.spotify.rate_limit_rpm,
+                        'retry_attempts': self.importers.spotify.retry_attempts,
+                        'request_timeout': self.importers.spotify.request_timeout
+                    }
                 },
                 'advanced': {
                     'enable_statistics': self.advanced.enable_statistics,
@@ -879,7 +803,7 @@ class Config:
         """Print a summary of the current configuration."""
         print("\n=== Configuration Summary ===")
         print(f"Config file: {self.config_path}")
-        print(f"Spotify: {'Anonymous' if self.spotify.anonymous else 'Authenticated'}")
+        print(f"Spotify: {'Anonymous' if self.importers.spotify.anonymous else 'Authenticated'}")
         print(f"Plex: {self.plex.baseurl} (section: {self.plex.section})")
         print(f"Beets library: {self.beets.library}")
         print(f"Music directory: {self.beets.directory}")

@@ -559,13 +559,15 @@ class PeriodeecApplication:
             start_time = time.time()
             
             # Get user info
-            spotify_user = await self.spotify_importer.get_user_info(user_config.spotify_username)
+            spotify_username = user_config.service_connections.spotify_username
+            spotify_user = await self.spotify_importer.get_user_info(spotify_username)
 
             # Get playlists
+            spotify_prefs = user_config.import_preferences.spotify
             playlists = await self.spotify_importer.get_user_playlists(
-                user_id=user_config.spotify_username,
-                include_collaborative=getattr(user_config, 'include_collaborative', True),
-                include_followed=getattr(user_config, 'include_followed', False)
+                user_id=spotify_username,
+                include_collaborative=spotify_prefs.get('include_collaborative', True),
+                include_followed=spotify_prefs.get('include_followed', False)
             )
             
             if not playlists:
