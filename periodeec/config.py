@@ -355,13 +355,38 @@ class Config:
             # Validate against schema
             self._validate_config(config_data)
             
-            # Load main configurations
-            self._load_spotify_config(config_data.get('spotify', {}))
-            self._load_plex_config(config_data.get('plex', {}))
-            self._load_beets_config(config_data.get('beets', {}))
-            self._load_paths_config(config_data.get('paths', {}))
-            self._load_logging_config(config_data.get('logging', {}))
-            self._load_advanced_config(config_data.get('advanced', {}))
+            # Load main configurations (support both new nested and legacy flat structure)
+            settings_data = config_data.get('settings', {})
+
+            # Load configurations - check nested first, then root level for backwards compatibility
+            self._load_spotify_config(
+                settings_data.get('spotify', config_data.get('spotify', {}))
+            )
+            self._load_plex_config(
+                settings_data.get('plex', config_data.get('plex', {}))
+            )
+            self._load_beets_config(
+                settings_data.get('beets', config_data.get('beets', {}))
+            )
+            # For paths, extract individual path settings from settings or use legacy paths section
+            paths_config = {}
+            if settings_data:
+                # Extract path-related settings from settings section
+                path_fields = ['downloads', 'failed', 'temp', 'playlists']
+                for field in path_fields:
+                    if field in settings_data:
+                        paths_config[field] = settings_data[field]
+            else:
+                # Legacy format - check for paths section
+                paths_config = config_data.get('paths', {})
+
+            self._load_paths_config(paths_config)
+            self._load_logging_config(
+                settings_data.get('logging', config_data.get('logging', {}))
+            )
+            self._load_advanced_config(
+                config_data.get('advanced', {})
+            )
 
             # Load importers configuration (supports both new format and legacy)
             importers_config = config_data.get('importers', {})
@@ -391,14 +416,19 @@ class Config:
         try:
             # Note: This is a simplified validation
             # In practice, you'd want more comprehensive schema validation
-            required_sections = ['plex']
-            
-            for section in required_sections:
-                if section not in config_data:
-                    raise ConfigurationError(f"Required configuration section missing: {section}")
+
+            # Check for plex config in nested settings or root level
+            settings_data = config_data.get('settings', {})
+            has_plex = (
+                'plex' in settings_data or
+                'plex' in config_data
+            )
+
+            if not has_plex:
+                raise ConfigurationError("Required configuration section missing: plex (should be under 'settings' or at root level)")
             
             # Validate Plex configuration
-            plex_config = config_data.get('plex', {})
+            plex_config = settings_data.get('plex', config_data.get('plex', {}))
             if not plex_config.get('baseurl') or not plex_config.get('token'):
                 raise ConfigurationError("Plex baseurl and token are required")
             
