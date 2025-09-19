@@ -12,3 +12,4 @@ aiohttp>=3.8.0
 PyYAML>=6.0
 jsonschema>=4.0.0  # For config validation - can work without this
 pathvalidate>=2.5.0  # For cross-platform filename sanitization
+pylast>=5.0.0  # For Last.FM API integration
