@@ -259,27 +259,40 @@ class BeetsHandler:
         def prettify_candidate(self, candidate):
             """Format candidate information for logging."""
             try:
-                # Handle different candidate types (beets version compatibility)
-                if hasattr(candidate, 'info') and candidate.info is not None:
-                    info = candidate.info
+                # Handle None candidates
+                if candidate is None:
+                    return "<None Candidate>"
+
+                # Handle string candidates first (simplest case)
+                if isinstance(candidate, str):
+                    return candidate
+
+                # Handle different candidate object types (beets version compatibility)
+                # Use getattr exclusively to avoid any potential attribute access issues
+                info = getattr(candidate, 'info', None)
+                if info is not None:
+                    # Older beets versions with info attribute
                     artist = getattr(info, 'artist', 'Unknown Artist')
                     album = getattr(info, 'album', 'Unknown Album')
                     year = getattr(info, 'year', 'Unknown')
                     return f"{artist} - {album} ({year})"
-                elif hasattr(candidate, 'artist') and hasattr(candidate, 'album'):
-                    # Direct access for newer beets versions
+                elif (getattr(candidate, 'artist', None) is not None and
+                      getattr(candidate, 'album', None) is not None):
+                    # Direct access for newer beets versions or different candidate types
                     artist = getattr(candidate, 'artist', 'Unknown Artist')
                     album = getattr(candidate, 'album', 'Unknown Album')
                     year = getattr(candidate, 'year', 'Unknown')
                     return f"{artist} - {album} ({year})"
-                elif isinstance(candidate, str):
-                    return candidate
                 else:
                     # Fallback for any object - try to get meaningful representation
                     candidate_str = str(candidate)
                     if hasattr(candidate, '__dict__'):
                         logger.debug(f"Unknown candidate type with attributes: {list(candidate.__dict__.keys())}")
                     return candidate_str
+            except AttributeError as ae:
+                logger.error(f"AttributeError in prettify_candidate: {ae}, candidate type: {type(candidate)}")
+                logger.error(f"Candidate value: {repr(candidate)}")
+                return f"<AttributeError: {type(candidate).__name__}>"
             except Exception as e:
                 logger.debug(f"Error formatting candidate: {e}, type: {type(candidate)}")
                 return f"<Candidate: {type(candidate).__name__}>"
@@ -523,10 +536,22 @@ class BeetsHandler:
                 handler_ref=self,
                 auto_mode=self.auto_import
             )
-            
-            # Run import
+
+            # Run import with detailed error tracking
             logger.info(f"Starting import: {path}")
-            session.run()
+            try:
+                session.run()
+            except AttributeError as ae:
+                if "'str' object has no attribute 'info'" in str(ae):
+                    logger.error(f"Beets library AttributeError during import: {ae}")
+                    logger.error(f"This error is likely from the beets library itself, not our code")
+                    # Try to provide more context
+                    import traceback
+                    logger.error(f"Full traceback: {traceback.format_exc()}")
+                raise ae
+            except Exception as e:
+                logger.error(f"Import run failed with error: {e}")
+                raise e
             
             # Process results
             if session.import_result.success:
