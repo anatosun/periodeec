@@ -158,10 +158,18 @@ class Slskd(Downloader):
                     if (quality_info['bitrate'] >= self.min_bitrate or
                         quality_info['format'] in ['flac', 'alac', 'ape', 'wav']):
 
+                        # Try to get full path - check multiple possible fields
+                        full_path = (file_info.get('path') or
+                                   file_info.get('file') or
+                                   file_info.get('filename', ''))
+
+                        # Debug: log what we're getting from slskd
+                        self._logger.debug(f"Found file: {filename}, path: {full_path}, from user: {username}")
+
                         results.append({
                             'username': username,
                             'filename': filename,
-                            'path': file_info.get('filename', ''),  # Full path from slskd
+                            'path': full_path,
                             'size': file_info.get('size', 0),
                             'quality_info': quality_info,
                             'speed': response.get('uploadSpeed', 0)
@@ -273,10 +281,12 @@ class Slskd(Downloader):
             return MatchResult(MatchQuality.NO_MATCH,
                              metadata={"error": "No search terms"})
 
-        self._logger.info(f"Searching Soulseek for: {query}")
+        self._logger.info(f"Searching Soulseek for: '{query}' (artist: '{artist}', album: '{album}', title: '{title}')")
 
         # Search
         results = self._simple_search(query)
+
+        self._logger.debug(f"Search returned {len(results)} total results for query: {query}")
 
         if not results:
             return MatchResult(MatchQuality.NO_MATCH,
@@ -290,6 +300,8 @@ class Slskd(Downloader):
             else:
                 # Debug: log why results were filtered out
                 self._logger.debug(f"Filtered out: {result['filename']} (artist: {artist}, album: {album})")
+
+        self._logger.debug(f"After filtering: {len(good_results)} results matched criteria")
 
         if not good_results:
             return MatchResult(MatchQuality.NO_MATCH,
