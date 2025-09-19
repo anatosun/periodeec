@@ -119,25 +119,40 @@ class PlexHandler:
     def create_collection(self, playlist: Playlist, items) -> bool:
         """Create or update a Plex collection."""
         section = self.plex_server.library.section(self.section)
-        try:
-            col = section.collection(title=playlist.title)
-            if col is not None:
-                logger.info(
-                    f"Updating existing Plex collection '{playlist.title}'")
-                col.removeItems(col.items())
-                col.addItems(items)
-                col.uploadPoster(url=playlist.poster)
-                col.editSummary(summary=playlist.summary)
-                return True
-        except Exception as e:
-            logger.info(
-                f"Creating new Plex collection '{playlist.title}': {e}")
 
+        # First, try to find an existing collection
+        existing_collection = None
         try:
+            existing_collection = section.collection(title=playlist.title)
+        except Exception as e:
+            # Only log if it's not a "not found" type error
+            if "not found" not in str(e).lower():
+                logger.debug(f"Error checking for existing collection '{playlist.title}': {e}")
+
+        # If collection exists, update it
+        if existing_collection is not None:
+            try:
+                logger.info(f"Updating existing Plex collection '{playlist.title}'")
+                existing_collection.removeItems(existing_collection.items())
+                existing_collection.addItems(items)
+                if playlist.poster:
+                    existing_collection.uploadPoster(url=playlist.poster)
+                if playlist.summary:
+                    existing_collection.editSummary(summary=playlist.summary)
+                return True
+            except Exception as e:
+                logger.error(f"Error updating existing collection '{playlist.title}': {e}")
+                return False
+
+        # If collection doesn't exist, create a new one
+        try:
+            logger.info(f"Creating new Plex collection '{playlist.title}'")
             col = self.plex_server.createCollection(
                 title=playlist.title, section=self.section, items=items)
-            col.uploadPoster(url=playlist.poster)
-            col.editSummary(summary=playlist.summary)
+            if playlist.poster:
+                col.uploadPoster(url=playlist.poster)
+            if playlist.summary:
+                col.editSummary(summary=playlist.summary)
             return True
         except Exception as e:
             logger.error(f"Failed to create collection {playlist.title}: {e}")
@@ -147,29 +162,43 @@ class PlexHandler:
         """Create or update a Plex playlist."""
         plex_instance = self.get_plex_instance_for_user(username)
 
+        # First, try to find an existing playlist
+        existing_playlist = None
         try:
             existing_playlist = plex_instance.playlist(title=playlist.title)
-            if existing_playlist is not None:
-                logger.info(
-                    f"Updating existing Plex playlist '{playlist.title}' for '{username}'")
+        except Exception as e:
+            # Only log if it's not a "not found" type error
+            if "not found" not in str(e).lower():
+                logger.debug(f"Error checking for existing playlist '{playlist.title}': {e}")
+
+        # If playlist exists, update it
+        if existing_playlist is not None:
+            try:
+                logger.info(f"Updating existing Plex playlist '{playlist.title}' for '{username}'")
                 existing_playlist.removeItems(existing_playlist.items())
                 existing_playlist.addItems(items)
-                existing_playlist.uploadPoster(url=playlist.poster)
-                existing_playlist.editSummary(summary=playlist.summary)
-            return True
-        except Exception as e:
-            logger.info(
-                f"Creating new Plex playlist '{playlist.title}' for '{username}': {e}")
-            try:
-                new_playlist = plex_instance.createPlaylist(
-                    playlist.title, items=items, smart=False)
-                new_playlist.uploadPoster(url=playlist.poster)
-                new_playlist.editSummary(summary=playlist.summary)
+                if playlist.poster:
+                    existing_playlist.uploadPoster(url=playlist.poster)
+                if playlist.summary:
+                    existing_playlist.editSummary(summary=playlist.summary)
                 return True
             except Exception as e:
-                logger.error(
-                    f"Error creating playlist {playlist.title} for '{username}': {e}")
+                logger.error(f"Error updating existing playlist '{playlist.title}' for '{username}': {e}")
                 return False
+
+        # If playlist doesn't exist, create a new one
+        try:
+            logger.info(f"Creating new Plex playlist '{playlist.title}' for '{username}'")
+            new_playlist = plex_instance.createPlaylist(
+                playlist.title, items=items, smart=False)
+            if playlist.poster:
+                new_playlist.uploadPoster(url=playlist.poster)
+            if playlist.summary:
+                new_playlist.editSummary(summary=playlist.summary)
+            return True
+        except Exception as e:
+            logger.error(f"Error creating playlist '{playlist.title}' for '{username}': {e}")
+            return False
 
     def create(self, playlist: Playlist, username="", collection: bool = False, create_m3u: bool = True) -> PlexOperationResult:
         """Create or update a Plex playlist or collection."""
