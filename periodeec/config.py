@@ -298,7 +298,7 @@ class Config:
 
             # Load core service configurations
             self._load_plex_config(
-                settings_data.get('plex', config_data.get('plex', {}))
+                settings_data.get('plex', {})
             )
             self._load_beets_config(
                 settings_data.get('beets', config_data.get('beets', {}))
@@ -349,18 +349,14 @@ class Config:
     
     def _validate_config(self, config_data: Dict[str, Any]):
         """Validate essential configuration requirements."""
-        # Check for plex config in nested settings or root level
+        # Check for plex config under settings only
         settings_data = config_data.get('settings', {})
-        has_plex = (
-            'plex' in settings_data or
-            'plex' in config_data
-        )
 
-        if not has_plex:
-            raise ConfigurationError("Required configuration section missing: plex (should be under 'settings' or at root level)")
+        if 'plex' not in settings_data:
+            raise ConfigurationError("Required configuration section missing: plex must be under 'settings'")
 
         # Validate Plex configuration
-        plex_config = settings_data.get('plex', config_data.get('plex', {}))
+        plex_config = settings_data.get('plex', {})
         if not plex_config.get('baseurl') or not plex_config.get('token'):
             raise ConfigurationError("Plex baseurl and token are required")
     
