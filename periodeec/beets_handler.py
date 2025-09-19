@@ -325,8 +325,13 @@ class BeetsHandler:
                     f"Strong match found among {len(task.candidates)} candidates",
                     details={'match_strength': 'strong', 'candidate_count': len(task.candidates)}
                 )
-                task.set_choice(match)
-                return action.APPLY
+                try:
+                    task.set_choice(match)
+                    return action.APPLY
+                except (AttributeError, TypeError) as e:
+                    logger.warning(f"Failed to set choice for strong match: {e}")
+                    self.import_result = ImportResult(False, f"Match selection failed: {e}")
+                    return action.SKIP
             
             elif task.rec == Recommendation.medium and self.auto_mode:
                 match = task.candidates[0]
@@ -340,8 +345,13 @@ class BeetsHandler:
                     f"Medium match found among {len(task.candidates)} candidates",
                     details={'match_strength': 'medium', 'candidate_count': len(task.candidates)}
                 )
-                task.set_choice(match)
-                return action.APPLY
+                try:
+                    task.set_choice(match)
+                    return action.APPLY
+                except (AttributeError, TypeError) as e:
+                    logger.warning(f"Failed to set choice for medium match: {e}")
+                    self.import_result = ImportResult(False, f"Match selection failed: {e}")
+                    return action.SKIP
             
             else:
                 logger.warning(f"No suitable album match found (recommendation: {task.rec})")
@@ -576,12 +586,15 @@ class BeetsHandler:
             try:
                 session.run()
             except AttributeError as ae:
-                if "'str' object has no attribute 'info'" in str(ae):
-                    logger.error(f"Beets library AttributeError during import: {ae}")
-                    logger.error(f"This error is likely from the beets library itself, not our code")
-                    # Try to provide more context
-                    import traceback
-                    logger.error(f"Full traceback: {traceback.format_exc()}")
+                if "'str' object has no attribute 'info'" in str(ae) or "chosen_info" in str(ae):
+                    logger.error(f"Beets 2.4.0 compatibility issue during import: {ae}")
+                    logger.error(f"This appears to be a beets 2.4.0+ compatibility issue with match handling")
+                    # Import failed due to compatibility issue - mark as failed
+                    return ImportResult(
+                        False,
+                        f"Beets 2.4.0 compatibility error: {ae}",
+                        details={'error_type': 'beets_compatibility', 'beets_version': '2.4.0'}
+                    )
                 raise ae
             except Exception as e:
                 logger.error(f"Import run failed with error: {e}")
