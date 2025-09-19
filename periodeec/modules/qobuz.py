@@ -102,10 +102,13 @@ class Qobuz(Downloader):
         try:
             results = self.qobuz.search_by_type(isrc, item_type="track", lucky=True)
             if results and len(results) > 0:
-                try:
-                    track_id = str(results[0]).split("/")[-1]
-                except AttributeError as e:
-                    self._logger.debug(f"Error processing track result: {e} - Result type: {type(results[0])} - Content: {results[0]}")
+                result = results[0]
+                if isinstance(result, dict) and 'url' in result:
+                    track_id = result['url'].split("/")[-1]
+                elif isinstance(result, str):
+                    track_id = result.split("/")[-1]
+                else:
+                    self._logger.debug(f"Unexpected result format: {type(result)} - Content: {result}")
                     return MatchResult(MatchQuality.NO_MATCH)
                 track_meta = self.qobuz.client.get_track_meta(track_id)
                 
@@ -165,12 +168,14 @@ class Qobuz(Downloader):
         best_score = 0.0
         best_result = None
         
-        for result_url in results[:5]:  # Check top 5 results
+        for result in results[:5]:  # Check top 5 results
             try:
-                try:
-                    album_id = result_url.split("/")[-1]
-                except AttributeError as e:
-                    self._logger.debug(f"Error processing album result: {e} - Result type: {type(result_url)} - Content: {result_url}")
+                if isinstance(result, dict) and 'url' in result:
+                    album_id = result['url'].split("/")[-1]
+                elif isinstance(result, str):
+                    album_id = result.split("/")[-1]
+                else:
+                    self._logger.debug(f"Unexpected album result format: {type(result)} - Content: {result}")
                     continue
                 album_meta = self.qobuz.client.get_album_meta(album_id)
                 
@@ -197,6 +202,7 @@ class Qobuz(Downloader):
                             'album': album_title,
                             'track_count': len(tracks)
                         }
+                        result_url = result['url'] if isinstance(result, dict) and 'url' in result else result
                         best_result = MatchResult(
                             quality=MatchQuality.HIGH if combined_score > 0.9 else MatchQuality.MEDIUM,
                             url=result_url,
@@ -214,12 +220,14 @@ class Qobuz(Downloader):
         best_score = 0.0
         best_result = MatchResult(MatchQuality.NO_MATCH)
         
-        for result_url in results[:10]:  # Check top 10 results
+        for result in results[:10]:  # Check top 10 results
             try:
-                try:
-                    track_id = result_url.split("/")[-1]
-                except AttributeError as e:
-                    self._logger.debug(f"Error processing track result: {e} - Result type: {type(result_url)} - Content: {result_url}")
+                if isinstance(result, dict) and 'url' in result:
+                    track_id = result['url'].split("/")[-1]
+                elif isinstance(result, str):
+                    track_id = result.split("/")[-1]
+                else:
+                    self._logger.debug(f"Unexpected track result format: {type(result)} - Content: {result}")
                     continue
                 track_meta = self.qobuz.client.get_track_meta(track_id)
                 
