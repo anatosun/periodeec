@@ -211,27 +211,152 @@ class Slskd(Downloader):
             'quality_score': quality_score
         }
     
-    async def _search(self, query: str) -> List[Dict[str, Any]]:
-        """Search for files on Soulseek network."""
+    async def _delete_search(self, search_id: str) -> None:
+        """Delete a search from slskd."""
+        if not search_id:
+            return
+
+        session = await self._get_session()
+        try:
+            async with session.delete(f"{self.base_url}/searches/{search_id}") as resp:
+                if resp.status in [200, 204, 404]:  # 404 if already deleted
+                    self._logger.debug(f"Search {search_id} deleted successfully")
+                else:
+                    self._logger.warning(f"Failed to delete search {search_id}: {resp.status}")
+        except Exception as e:
+            self._logger.warning(f"Error deleting search {search_id}: {e}")
+
+    async def _get_existing_searches(self) -> List[Dict[str, Any]]:
+        """Get list of existing searches from slskd."""
+        session = await self._get_session()
+        try:
+            async with session.get(f"{self.base_url}/searches") as resp:
+                if resp.status == 200:
+                    searches = await resp.json()
+                    return searches if isinstance(searches, list) else []
+                else:
+                    self._logger.debug(f"Failed to get existing searches: {resp.status}")
+                    return []
+        except Exception as e:
+            self._logger.debug(f"Error getting existing searches: {e}")
+            return []
+
+    async def _find_existing_search(self, query: str) -> Optional[Dict[str, Any]]:
+        """Find an existing search with the same query."""
+        existing_searches = await self._get_existing_searches()
+
+        query_normalized = query.lower().strip()
+
+        for search in existing_searches:
+            search_text = search.get('searchText', '').lower().strip()
+            search_state = search.get('state', '')
+
+            # Match if query is identical and search is active or completed
+            if (search_text == query_normalized and
+                search_state in ['InProgress', 'Completed', 'Searching']):
+                self._logger.info(f"Found existing search for '{query}': {search.get('id')} ({search_state})")
+                return search
+
+        return None
+
+    def _process_search_responses(self, responses: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Process search responses into standardized result format."""
+        results = []
+        for response in responses[:self.max_results]:
+            username = response.get('username', '')
+            files = response.get('files', [])
+
+            for file_info in files:
+                audio_info = self._extract_audio_info(file_info.get('filename', ''))
+
+                # Filter by minimum bitrate and preferred formats
+                if (audio_info['bitrate'] >= self.min_bitrate or
+                    audio_info['format'] in ['flac', 'alac', 'ape', 'wav']):
+
+                    results.append({
+                        'username': username,
+                        'filename': file_info.get('filename', ''),
+                        'path': file_info.get('filename', ''),  # slskd uses filename as path
+                        'size': file_info.get('size', 0),
+                        'audio_info': audio_info,
+                        'speed': response.get('uploadSpeed', 0),
+                        'queue_length': response.get('queueLength', 0)
+                    })
+
+        return results
+
+    async def _search(self, query: str) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+        """Search for files on Soulseek network. Returns (results, search_id)."""
         if not self._authenticated:
             await self._authenticate()
 
         if not self._authenticated:
-            return []
+            return [], None
 
-        # Check for duplicate queries
+        # Check for existing search with same query first
+        existing_search = await self._find_existing_search(query)
+        if existing_search:
+            search_id = existing_search.get('id')
+            search_state = existing_search.get('state')
+
+            # If search is completed, get its results
+            if search_state == 'Completed':
+                self._logger.info(f"Reusing completed search {search_id} for query: {query}")
+                try:
+                    session = await self._get_session()
+                    async with session.get(f"{self.base_url}/searches/{search_id}/responses") as resp:
+                        if resp.status == 200:
+                            responses = await resp.json()
+                            results = self._process_search_responses(responses)
+                            return results, search_id
+                        else:
+                            self._logger.warning(f"Failed to get results from existing search {search_id}")
+                except Exception as e:
+                    self._logger.warning(f"Error getting results from existing search {search_id}: {e}")
+
+            # If search is in progress, wait for it to complete
+            elif search_state in ['InProgress', 'Searching']:
+                self._logger.info(f"Waiting for existing search {search_id} to complete for query: {query}")
+                try:
+                    search_timeout = min(30, self.timeout // 2)
+                    start_time = time.time()
+                    session = await self._get_session()
+
+                    while time.time() - start_time < search_timeout:
+                        async with session.get(f"{self.base_url}/searches/{search_id}") as resp:
+                            if resp.status == 200:
+                                search_status = await resp.json()
+                                state = search_status.get('state', '')
+
+                                if state in ['Completed', 'TimedOut']:
+                                    # Get the results
+                                    async with session.get(f"{self.base_url}/searches/{search_id}/responses") as resp:
+                                        if resp.status == 200:
+                                            responses = await resp.json()
+                                            results = self._process_search_responses(responses)
+                                            return results, search_id
+                                    break
+                                elif state == 'Errored':
+                                    self._logger.warning(f"Existing search {search_id} errored, creating new search")
+                                    break
+                        await asyncio.sleep(1)
+                except Exception as e:
+                    self._logger.warning(f"Error waiting for existing search {search_id}: {e}")
+
+        # Fall back to simple recent query check for very recent requests
         query_hash = hash(query.lower().strip())
         if query_hash in self._recent_queries:
-            self._logger.info(f"Skipping duplicate query: {query}")
-            return []
+            self._logger.debug(f"Skipping very recent duplicate query: {query}")
+            return [], None
 
-        # Add to recent queries (keep last 100 to avoid memory issues)
+        # Add to recent queries (keep last 50 to avoid memory issues)
         self._recent_queries.add(query_hash)
-        if len(self._recent_queries) > 100:
+        if len(self._recent_queries) > 50:
             # Remove oldest entries (approximate cleanup)
-            self._recent_queries = set(list(self._recent_queries)[-50:])
-        
+            self._recent_queries = set(list(self._recent_queries)[-25:])
+
         session = await self._get_session()
+        search_id = None
 
         try:
             # Rate limiting - ensure minimum delay between searches to avoid conflicts
@@ -249,16 +374,20 @@ class Slskd(Downloader):
             encoded_query = quote(query)
 
             # Start search with retry logic for conflicts
-            search_id = None
             max_retries = 3
 
             for attempt in range(max_retries):
                 async with session.post(f"{self.base_url}/searches",
                                       json={'searchText': query}) as resp:
-                    if resp.status == 201:
+                    if resp.status in [200, 201]:
+                        # Accept both 200 and 201 as success (slskd API compatibility)
                         search_data = await resp.json()
                         search_id = search_data.get('id')
-                        break
+                        if search_id:
+                            break
+                        else:
+                            self._logger.error(f"Search response missing ID: {search_data}")
+                            return [], None
                     elif resp.status == 409:
                         # Conflict - search already running or rate limited
                         if attempt < max_retries - 1:
@@ -268,72 +397,65 @@ class Slskd(Downloader):
                             continue
                         else:
                             self._logger.error(f"Search initiation failed after {max_retries} attempts: 409 Conflict (too many concurrent searches or duplicate query)")
-                            return []
+                            return [], None
                     else:
                         self._logger.error(f"Search initiation failed: {resp.status}")
                         if attempt < max_retries - 1:
                             await asyncio.sleep(1)
                             continue
-                        return []
-            
+                        return [], None
+
             if not search_id:
                 self._logger.error("No search ID returned")
-                return []
-            
+                return [], None
+
             # Wait for search to complete (with timeout)
             search_timeout = min(30, self.timeout // 2)
             start_time = time.time()
-            
+
             while time.time() - start_time < search_timeout:
                 async with session.get(f"{self.base_url}/searches/{search_id}") as resp:
                     if resp.status == 200:
                         search_status = await resp.json()
                         state = search_status.get('state', '')
-                        
+
                         if state in ['Completed', 'TimedOut']:
                             break
                         elif state == 'Errored':
                             self._logger.error("Search errored")
-                            return []
-                
+                            # Delete failed search
+                            await self._delete_search(search_id)
+                            return [], None
+
                 await asyncio.sleep(1)
-            
+
             # Get search results
             async with session.get(f"{self.base_url}/searches/{search_id}/responses") as resp:
                 if resp.status != 200:
                     self._logger.error(f"Failed to get search results: {resp.status}")
-                    return []
-                
+                    # Delete search since we couldn't get results
+                    await self._delete_search(search_id)
+                    return [], None
+
                 responses = await resp.json()
-            
-            # Process and flatten results
-            results = []
-            for response in responses[:self.max_results]:
-                username = response.get('username', '')
-                files = response.get('files', [])
-                
-                for file_info in files:
-                    audio_info = self._extract_audio_info(file_info.get('filename', ''))
-                    
-                    # Filter by minimum bitrate and preferred formats
-                    if (audio_info['bitrate'] >= self.min_bitrate or 
-                        audio_info['format'] in ['flac', 'alac', 'ape', 'wav']):
-                        
-                        results.append({
-                            'username': username,
-                            'filename': file_info.get('filename', ''),
-                            'size': file_info.get('size', 0),
-                            'path': file_info.get('filename', ''),  # Full path on remote
-                            'audio_info': audio_info,
-                            'speed': response.get('uploadSpeed', 0),
-                            'queue_length': response.get('queueLength', 0)
-                        })
-            
-            return results
-        
+
+            # Process search responses using common method
+            results = self._process_search_responses(responses)
+
+            # If no results found, delete the search immediately
+            if not results:
+                self._logger.info(f"No valid results found for query: {query}, deleting search")
+                await self._delete_search(search_id)
+                return [], None
+
+            return results, search_id
+
         except Exception as e:
             self._logger.error(f"Search failed: {e}")
-            return []
+            # Delete search on error
+            if search_id:
+                await self._delete_search(search_id)
+            return [], None
     
     def _score_result(self, result: Dict[str, Any], artist: str, title: str, 
                      album: str = "") -> Tuple[float, MatchQuality]:
@@ -421,12 +543,24 @@ class Slskd(Downloader):
     
     async def _async_match(self, isrc: str, artist: str, title: str, album: str = "") -> MatchResult:
         """Async version of match method."""
-        # Build simple "artist album" query format
-        query_parts = []
-
+        # Build optimized query for Soulseek album searches
         if album and artist:
-            # Primary strategy: simple "artist album" format
-            query = f"{artist} {album}"
+            # For album searches, optimize query strategy:
+            # 1. For distinctive album names, album-only search often works better
+            # 2. For generic/short albums, include artist to narrow results
+            common_album_words = {'greatest', 'hits', 'best', 'collection', 'anthology', 'live', 'unplugged'}
+            album_words = set(album.lower().split())
+
+            # Use album-only query for distinctive albums, artist+album for generic ones
+            if (len(album) < 10 or
+                any(word in album_words for word in common_album_words) or
+                len(album.split()) < 2):
+                query = f"{artist} {album}"
+                self._logger.debug(f"Using artist+album query for generic/short album: {query}")
+            else:
+                # For distinctive album names, album-only search often finds complete albums
+                query = album
+                self._logger.debug(f"Using album-only query for distinctive album: {query}")
         elif artist and title:
             # Fallback: "artist title" for individual track search
             query = f"{artist} {title}"
@@ -441,22 +575,23 @@ class Slskd(Downloader):
             query = title
         else:
             query = ""
-        
+
         if not query.strip():
             return MatchResult(MatchQuality.NO_MATCH, metadata={"error_message": "No search terms provided"})
-        
+
         if album and artist:
             self._logger.info(f"Searching Soulseek for album: {artist} - {album}")
         else:
             self._logger.info(f"Searching Soulseek for track: {query}")
-        
-        # Search for results
-        results = await self._search(query)
-        
+
+        # Search for results (now returns tuple with search_id)
+        results, search_id = await self._search(query)
+
         if not results:
             self._logger.warning(f"No results found for: {query}")
+            # No need to delete search_id here as _search already handles zero results cleanup
             return MatchResult(MatchQuality.NO_MATCH, metadata={"error_message": "No search results"})
-        
+
         # Filter results based on artist and album match
         filtered_results = []
         for result in results:
@@ -475,16 +610,19 @@ class Slskd(Downloader):
             score, quality = self._score_result(result, artist, title, album)
             if quality != MatchQuality.NO_MATCH:
                 scored_results.append((score, quality, result))
-        
+
         if not scored_results:
+            # Delete search since no suitable matches found
+            if search_id:
+                await self._delete_search(search_id)
             return MatchResult(MatchQuality.NO_MATCH, metadata={"error_message": "No suitable matches found"})
-        
+
         # Sort by score (descending)
         scored_results.sort(key=lambda x: x[0], reverse=True)
         best_score, best_quality, best_result = scored_results[0]
-        
+
         self._logger.info(f"Best match: {best_result['filename']} (score: {best_score:.2f})")
-        
+
         return MatchResult(
             quality=best_quality,
             url=f"soulseek://{best_result['username']}/{best_result['path']}",
@@ -496,6 +634,7 @@ class Slskd(Downloader):
                 'audio_info': best_result['audio_info'],
                 'speed': best_result.get('speed', 0),
                 'queue_length': best_result.get('queue_length', 0),
+                'search_id': search_id,  # Store search_id for later cleanup
                 'alternatives': [
                     {
                         'filename': r[2]['filename'],
@@ -587,40 +726,48 @@ class Slskd(Downloader):
             self._logger.error(f"Download error: {e}")
             return False
     
-    async def _async_enqueue(self, path: str, isrc: str, artist: str, 
+    async def _async_enqueue(self, path: str, isrc: str, artist: str,
                            title: str, album: str = "") -> DownloadResult:
         """Async version of enqueue method."""
         # Find the track first
         match_result = await self._async_match(isrc, artist, title, album)
-        
+
         if not match_result.found:
             return DownloadResult(
                 status=DownloadStatus.NOT_FOUND,
                 error_message="No suitable match found on Soulseek",
                 match_quality=match_result.quality
             )
-        
+
         # Extract download info from match
         metadata = match_result.metadata
         username = metadata.get('username', '')
         filename = metadata.get('filename', '')
-        
+        search_id = metadata.get('search_id')
+
         if not username or not filename:
+            # Clean up search if we can't download
+            if search_id:
+                await self._delete_search(search_id)
             return DownloadResult(
                 status=DownloadStatus.FAILED,
                 error_message="Invalid match result - missing username or filename",
                 match_quality=match_result.quality
             )
-        
+
         # Create download directory
         os.makedirs(path, exist_ok=True)
-        
+
         # Start download
         self._logger.info(f"Downloading '{filename}' from user '{username}'")
-        
+
         try:
             success = await self._async_download(username, filename, path)
-            
+
+            # Clean up search after download attempt (success or failure)
+            if search_id:
+                await self._delete_search(search_id)
+
             if success:
                 return DownloadResult(
                     status=DownloadStatus.SUCCESS,
@@ -640,11 +787,15 @@ class Slskd(Downloader):
                     match_quality=match_result.quality,
                     match_url=match_result.url
                 )
-        
+
         except Exception as e:
             error_msg = str(e)
             self._logger.error(f"Download failed: {error_msg}")
-            
+
+            # Clean up search on exception
+            if search_id:
+                await self._delete_search(search_id)
+
             status = DownloadStatus.FAILED
             if "timeout" in error_msg.lower():
                 status = DownloadStatus.TIMEOUT
@@ -652,7 +803,7 @@ class Slskd(Downloader):
                 status = DownloadStatus.RATE_LIMITED
             elif "unauthorized" in error_msg.lower():
                 status = DownloadStatus.UNAUTHORIZED
-            
+
             return DownloadResult(
                 status=status,
                 error_message=error_msg,
