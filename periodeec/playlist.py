@@ -22,10 +22,14 @@ class Playlist:
         self.number_of_tracks = number_of_tracks
         self.id = id
         self.users = {}
-        self.path = os.path.join(os.path.abspath(path))
+        # Only set path if provided and not empty
+        if path and path.strip():
+            self.path = os.path.abspath(path)
+        else:
+            self.path = None
 
         try:
-            if os.path.exists(self.path):
+            if self.path and os.path.exists(self.path):
                 logger.info(
                     f"Playlist '{self.title}' exists at path '{self.path}': fetching information from cache")
                 with open(self.path, "r") as f:
@@ -45,8 +49,16 @@ class Playlist:
             logger.error(e)
 
     def save(self):
+        if not self.path:
+            logger.warning(f"Cannot save playlist '{self.title}': no path specified")
+            return
+
         logger.info(
             f"Saving playlist '{self.title}' with snapshot '{self.snapshot_id}' at '{self.path}'")
+
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(self.path), exist_ok=True)
+
         with open(self.path, "w") as f:
             json.dump(self.to_dict(), f)
 
@@ -54,8 +66,7 @@ class Playlist:
         self.users[username] = self.snapshot_id
 
     def is_up_to_date(self):
-
-        if not os.path.exists(self.path):
+        if not self.path or not os.path.exists(self.path):
             return False
         try:
             with open(self.path, "r") as f:
