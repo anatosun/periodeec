@@ -285,8 +285,8 @@ class PeriodeecApplication:
                 plex_baseurl=self.config.plex.baseurl,
                 plex_token=self.config.plex.token,
                 plex_section=self.config.plex.section,
-                spotify_client_id=self.config.spotify.client_id,
-                spotify_client_secret=self.config.spotify.client_secret,
+                spotify_client_id=self.config.importers.spotify.client_id,
+                spotify_client_secret=self.config.importers.spotify.client_secret,
                 beets_plugins=self.config.beets.plugins,
                 fuzzy=self.config.beets.fuzzy,
                 auto_import=self.config.beets.auto_import,
@@ -296,7 +296,7 @@ class PeriodeecApplication:
             )
             
             # Initialize Spotify importer
-            spotify_config = self.config.spotify
+            spotify_config = self.config.importers.spotify
             spotify_importer_config = {
                 'client_id': spotify_config.client_id,
                 'client_secret': spotify_config.client_secret,

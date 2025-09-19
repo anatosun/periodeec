@@ -464,6 +464,8 @@ class Config:
         # Load Spotify configuration (backwards compatibility)
         spotify_config = config.get('spotify', {})
         self.importers.spotify = SpotifyConfig(**spotify_config)
+        # Also set legacy attribute for backward compatibility
+        self.spotify = self.importers.spotify
 
         # Load Last.FM configuration
         lastfm_config = config.get('lastfm', {})
