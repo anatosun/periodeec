@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class SpotifyConfig:
     """Spotify service configuration."""
+    enabled: bool = True
     client_id: str = ""
     client_secret: str = ""
     anonymous: bool = False
@@ -23,6 +24,8 @@ class SpotifyConfig:
     request_timeout: int = 30
     include_collaborative: bool = True
     include_followed: bool = False
+    add_source_to_titles: bool = False
+    source_tag_format: str = "({service})"
 
 
 @dataclass
@@ -87,6 +90,45 @@ class SlskdConfig(DownloaderConfig):
 
 
 @dataclass
+class LastFMConfig:
+    """Last.FM importer configuration."""
+    enabled: bool = False
+    api_key: str = ""
+    api_secret: str = ""
+    rate_limit_rpm: int = 200
+    add_source_to_titles: bool = False
+    source_tag_format: str = "({service})"
+    default_limit: int = 50
+    max_retries: int = 3
+    include_top_tracks: bool = True
+    include_loved_tracks: bool = True
+    top_tracks_periods: List[str] = field(default_factory=lambda: ["overall", "12month", "6month", "3month"])
+
+
+@dataclass
+class ListenBrainzConfig:
+    """ListenBrainz importer configuration."""
+    enabled: bool = False
+    user_token: str = ""
+    server_url: str = "https://listenbrainz.org"
+    rate_limit_rpm: int = 60
+    add_source_to_titles: bool = False
+    source_tag_format: str = "({service})"
+    default_limit: int = 100
+    max_retries: int = 3
+    include_top_artists: bool = True
+    include_recent_listens: bool = True
+
+
+@dataclass
+class ImportersConfig:
+    """Multi-service importers configuration."""
+    spotify: SpotifyConfig = field(default_factory=SpotifyConfig)
+    lastfm: LastFMConfig = field(default_factory=LastFMConfig)
+    listenbrainz: ListenBrainzConfig = field(default_factory=ListenBrainzConfig)
+
+
+@dataclass
 class PathConfig:
     """File path configuration."""
     config: str = "./config"
@@ -127,17 +169,56 @@ class CollectionConfig:
 
 
 @dataclass
-class UserConfig:
-    """User sync configuration."""
+class ServiceConnections:
+    """User connections to different music services."""
     spotify_username: str = ""
+    lastfm_username: str = ""
+    listenbrainz_username: str = ""
+
+
+@dataclass
+class ImportPreferences:
+    """User preferences for importing from services."""
+    primary_service: str = "spotify"
+    enabled_services: List[str] = field(default_factory=lambda: ["spotify"])
+    spotify: Dict[str, Any] = field(default_factory=lambda: {
+        "include_collaborative": True,
+        "include_followed": False
+    })
+    lastfm: Dict[str, Any] = field(default_factory=lambda: {
+        "include_top_tracks": True,
+        "include_loved_tracks": True,
+        "top_tracks_periods": ["overall", "12month"]
+    })
+    listenbrainz: Dict[str, Any] = field(default_factory=lambda: {
+        "include_top_artists": True,
+        "include_recent_listens": True
+    })
+
+
+@dataclass
+class UserConfig:
+    """Enhanced user sync configuration with multi-service support."""
+    # Service connections
+    service_connections: ServiceConnections = field(default_factory=ServiceConnections)
+
+    # Import preferences
+    import_preferences: ImportPreferences = field(default_factory=ImportPreferences)
+
+    # Plex sync settings
     sync_to_plex_users: List[str] = field(default_factory=list)
     download_missing: bool = True
     create_m3u: bool = True
-    include_collaborative: bool = True
-    include_followed: bool = False
-    schedule_minutes: int = 1440
+
+    # Scheduling
+    schedule_minutes: int = 1440  # 24 hours
     enabled: bool = True
     overwrite: bool = True
+
+    # Legacy support (deprecated, use service_connections.spotify_username)
+    spotify_username: str = ""
+    include_collaborative: bool = True
+    include_followed: bool = False
 
 
 @dataclass
@@ -245,7 +326,10 @@ class Config:
         self.paths = PathConfig()
         self.logging = LoggingConfig()
         self.advanced = AdvancedConfig()
-        
+
+        # Multi-service importers configuration
+        self.importers = ImportersConfig()
+
         # Collections
         self.downloaders: Dict[str, Union[QobuzConfig, SlskdConfig]] = {}
         self.playlists: Dict[str, PlaylistConfig] = {}
@@ -278,6 +362,13 @@ class Config:
             self._load_paths_config(config_data.get('paths', {}))
             self._load_logging_config(config_data.get('logging', {}))
             self._load_advanced_config(config_data.get('advanced', {}))
+
+            # Load importers configuration (supports both new format and legacy)
+            importers_config = config_data.get('importers', {})
+            if not importers_config:
+                # Legacy format - services at root level
+                importers_config = config_data
+            self._load_importers_config(importers_config)
             
             # Load downloader configurations
             self._load_downloader_configs(config_data.get('downloaders', {}))
@@ -337,6 +428,20 @@ class Config:
     def _load_advanced_config(self, config: Dict[str, Any]):
         """Load advanced configuration."""
         self.advanced = AdvancedConfig(**config)
+
+    def _load_importers_config(self, config: Dict[str, Any]):
+        """Load multi-service importers configuration."""
+        # Load Spotify configuration (backwards compatibility)
+        spotify_config = config.get('spotify', {})
+        self.importers.spotify = SpotifyConfig(**spotify_config)
+
+        # Load Last.FM configuration
+        lastfm_config = config.get('lastfm', {})
+        self.importers.lastfm = LastFMConfig(**lastfm_config)
+
+        # Load ListenBrainz configuration
+        listenbrainz_config = config.get('listenbrainz', {})
+        self.importers.listenbrainz = ListenBrainzConfig(**listenbrainz_config)
     
     def _load_downloader_configs(self, config: Dict[str, Any]):
         """Load downloader configurations."""
