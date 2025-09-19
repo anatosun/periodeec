@@ -102,7 +102,11 @@ class Qobuz(Downloader):
         try:
             results = self.qobuz.search_by_type(isrc, item_type="track", lucky=True)
             if results and len(results) > 0:
-                track_id = str(results[0]).split("/")[-1]
+                try:
+                    track_id = str(results[0]).split("/")[-1]
+                except AttributeError as e:
+                    self._logger.debug(f"Error processing track result: {e} - Result type: {type(results[0])} - Content: {results[0]}")
+                    return MatchResult(MatchQuality.NO_MATCH)
                 track_meta = self.qobuz.client.get_track_meta(track_id)
                 
                 album_url = track_meta.get('album', {}).get('url', '')
@@ -163,7 +167,11 @@ class Qobuz(Downloader):
         
         for result_url in results[:5]:  # Check top 5 results
             try:
-                album_id = result_url.split("/")[-1]
+                try:
+                    album_id = result_url.split("/")[-1]
+                except AttributeError as e:
+                    self._logger.debug(f"Error processing album result: {e} - Result type: {type(result_url)} - Content: {result_url}")
+                    continue
                 album_meta = self.qobuz.client.get_album_meta(album_id)
                 
                 album_artist = album_meta.get('artist', {}).get('name', '')
@@ -208,7 +216,11 @@ class Qobuz(Downloader):
         
         for result_url in results[:10]:  # Check top 10 results
             try:
-                track_id = result_url.split("/")[-1]
+                try:
+                    track_id = result_url.split("/")[-1]
+                except AttributeError as e:
+                    self._logger.debug(f"Error processing track result: {e} - Result type: {type(result_url)} - Content: {result_url}")
+                    continue
                 track_meta = self.qobuz.client.get_track_meta(track_id)
                 
                 track_artist = track_meta.get('performer', {}).get('name', '')
