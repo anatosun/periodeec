@@ -337,8 +337,11 @@ class PeriodeecApplication:
                 lastfm_importer_config = {
                     'api_key': lastfm_config.api_key,
                     'api_secret': lastfm_config.api_secret,
-                    'username': lastfm_config.username,
-                    'password': lastfm_config.password
+                    'rate_limit_rpm': lastfm_config.rate_limit_rpm,
+                    'add_source_to_titles': lastfm_config.add_source_to_titles,
+                    'source_tag_format': lastfm_config.source_tag_format,
+                    'default_limit': lastfm_config.default_limit,
+                    'max_retries': lastfm_config.max_retries
                 }
                 self.lastfm_importer = LastFMImporter(lastfm_importer_config)
                 await self.lastfm_importer.authenticate()
@@ -348,7 +351,12 @@ class PeriodeecApplication:
             if listenbrainz_config.enabled:
                 listenbrainz_importer_config = {
                     'user_token': listenbrainz_config.user_token,
-                    'username': listenbrainz_config.username
+                    'server_url': listenbrainz_config.server_url,
+                    'rate_limit_rpm': listenbrainz_config.rate_limit_rpm,
+                    'add_source_to_titles': listenbrainz_config.add_source_to_titles,
+                    'source_tag_format': listenbrainz_config.source_tag_format,
+                    'default_limit': listenbrainz_config.default_limit,
+                    'max_retries': listenbrainz_config.max_retries
                 }
                 self.listenbrainz_importer = ListenBrainzImporter(listenbrainz_importer_config)
                 await self.listenbrainz_importer.authenticate()
