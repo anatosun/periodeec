@@ -163,7 +163,7 @@ COMPOSE_PROFILES=plex,downloaders docker-compose up -d
 ### Development Mode
 ```bash
 # Build with development target
-docker build --target builder -t periodeec:dev -f Dockerfile.improved .
+docker build --target builder -t periodeec:dev -f Dockerfile .
 
 # Run with local source mounted
 docker run -it --rm \
@@ -276,7 +276,7 @@ kompose convert -f docker-compose.improved.yml
 ```bash
 # Build multi-architecture images
 docker buildx build --platform linux/amd64,linux/arm64 \
-  -t periodeec:latest -f Dockerfile.improved .
+  -t periodeec:latest -f Dockerfile .
 ```
 
 ## Migration from Old Docker Setup
