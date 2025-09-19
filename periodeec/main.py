@@ -197,7 +197,19 @@ class PeriodeecApplication:
             self.logger.info(f"Loading configuration from {self.config_path}")
             
             self.config = load_config(self.config_path)
-            
+
+            # Log configuration paths for debugging
+            self.logger.info("Configuration paths resolved:")
+            self.logger.info(f"  Working directory: {os.getcwd()}")
+            self.logger.info(f"  Config directory: {self.config.config_dir}")
+            self.logger.info(f"  Downloads: {self.config.paths.downloads}")
+            self.logger.info(f"  Failed: {self.config.paths.failed}")
+            self.logger.info(f"  Playlists: {self.config.paths.playlists}")
+            self.logger.info(f"  M3U: {self.config.paths.m3u}")
+            self.logger.info(f"  Cache: {self.config.paths.cache}")
+            self.logger.info(f"  Beets library: {self.config.beets.library}")
+            self.logger.info(f"  Beets directory: {self.config.beets.directory}")
+
             # Setup proper logging
             self.setup_logging()
             self.logger.info("Configuration loaded successfully")
