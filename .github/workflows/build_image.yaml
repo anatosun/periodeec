@@ -81,7 +81,9 @@ jobs:
           # Also set labels
           echo "labels<<EOF" >> $GITHUB_OUTPUT
           echo "org.opencontainers.image.title=Periodeec" >> $GITHUB_OUTPUT
-          echo "org.opencontainers.image.description=Music Synchronization Tool" >> $GITHUB_OUTPUT
+          echo "org.opencontainers.image.description=Automated music synchronization system" >> $GITHUB_OUTPUT
+          echo "org.opencontainers.image.vendor=Periodeec Project" >> $GITHUB_OUTPUT
+          echo "org.opencontainers.image.licenses=MIT" >> $GITHUB_OUTPUT
           echo "org.opencontainers.image.url=https://github.com/${{ github.repository }}" >> $GITHUB_OUTPUT
           echo "org.opencontainers.image.source=https://github.com/${{ github.repository }}" >> $GITHUB_OUTPUT
           echo "org.opencontainers.image.version=${SANITIZED_BRANCH}" >> $GITHUB_OUTPUT
@@ -93,16 +95,17 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
+          file: ./Dockerfile.improved
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          target: production
           build-args: |
-            BUILDTIME=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
-            VERSION=${{ steps.meta.outputs.branch }}
-            REVISION=${{ github.sha }}
+            PUID=1000
+            PGID=1000
 
       - name: Summary
         run: |

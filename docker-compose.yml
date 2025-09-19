@@ -1,0 +1,141 @@
+version: '3.8'
+
+services:
+  periodeec:
+    build:
+      context: .
+      dockerfile: Dockerfile.improved
+      args:
+        PUID: ${PUID:-1000}
+        PGID: ${PGID:-1000}
+    container_name: periodeec
+    restart: unless-stopped
+
+    # Environment variables
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-UTC}
+      - PERIODEEC_LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - PERIODEEC_CACHE_DIR=/cache
+
+    # Volume mounts
+    volumes:
+      # Configuration
+      - ./config:/config:ro
+
+      # Data directories
+      - ./music:/data/music
+      - ./downloads:/data/downloads
+      - ./failed:/data/failed
+
+      # Cache (ephemeral, can be tmpfs for performance)
+      - cache_data:/cache
+
+      # Optional: Beets config
+      - ./beets:/config/beets:ro
+
+    # Network configuration
+    networks:
+      - periodeec-network
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.1'
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "from periodeec.config import load_config; load_config('/config/config.yaml')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+
+    # Read-only root filesystem for security
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=100m
+      - /var/tmp:noexec,nosuid,size=50m
+
+  # Optional: Plex Media Server (if not running separately)
+  plex:
+    image: plexinc/pms-docker:latest
+    container_name: plex
+    restart: unless-stopped
+
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-UTC}
+      - PLEX_CLAIM=${PLEX_CLAIM}
+
+    volumes:
+      - plex_config:/config
+      - ./music:/music:ro
+
+    networks:
+      - periodeec-network
+
+    ports:
+      - "32400:32400"
+
+    profiles:
+      - plex
+
+  # Optional: slskd for Soulseek downloads
+  slskd:
+    image: slskd/slskd:latest
+    container_name: slskd
+    restart: unless-stopped
+
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-UTC}
+
+    volumes:
+      - slskd_config:/app
+      - ./downloads:/downloads
+      - ./music:/music
+
+    networks:
+      - periodeec-network
+
+    ports:
+      - "5030:5030"
+      - "50300:50300"
+
+    profiles:
+      - downloaders
+
+volumes:
+  cache_data:
+    driver: local
+  plex_config:
+    driver: local
+  slskd_config:
+    driver: local
+
+networks:
+  periodeec-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

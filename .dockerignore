@@ -1,5 +1,76 @@
-docker-compose.yaml
-Dockerfile
-README.md
+# Git and version control
+.git
+.gitignore
+*.git*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
 .env
-.venv
+*.egg-info/
+dist/
+build/
+
+# IDE and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Documentation
+*.md
+docs/
+examples/
+*.rst
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Cache directories
+.cache/
+*.cache
+
+# Logs
+*.log
+logs/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Application specific
+config/
+music/
+downloads/
+failed/
+cache/
+*.json
+*.db
+*.blb
+
+# Development files
+debug_*.py
+test_*.py
+Dockerfile*
+docker-compose*.yml
+.dockerignore*
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+Jenkinsfile
