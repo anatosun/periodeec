@@ -26,6 +26,8 @@ from periodeec.config import load_config, ConfigurationError, Config
 from periodeec.beets_handler import BeetsHandler
 from periodeec.plex_handler import PlexHandler
 from periodeec.importers.spotify_importer import SpotifyImporter
+from periodeec.importers.lastfm_importer import LastFMImporter
+from periodeec.importers.listenbrainz_importer import ListenBrainzImporter
 from periodeec.download_manager import DownloadManager
 from periodeec.schema import Track
 from periodeec.schema import User
@@ -134,6 +136,8 @@ class PeriodeecApplication:
         
         # Component instances
         self.spotify_importer: Optional[SpotifyImporter] = None
+        self.lastfm_importer: Optional[LastFMImporter] = None
+        self.listenbrainz_importer: Optional[ListenBrainzImporter] = None
         self.plex_handler: Optional[PlexHandler] = None
         self.beets_handler: Optional[BeetsHandler] = None
         self.download_manager: Optional[DownloadManager] = None
@@ -326,7 +330,29 @@ class PeriodeecApplication:
             self.spotify_importer = SpotifyImporter(spotify_importer_config)
             # Authenticate the importer
             await self.spotify_importer.authenticate()
-            
+
+            # Initialize Last.fm importer if enabled
+            lastfm_config = self.config.importers.lastfm
+            if lastfm_config.enabled:
+                lastfm_importer_config = {
+                    'api_key': lastfm_config.api_key,
+                    'api_secret': lastfm_config.api_secret,
+                    'username': lastfm_config.username,
+                    'password': lastfm_config.password
+                }
+                self.lastfm_importer = LastFMImporter(lastfm_importer_config)
+                await self.lastfm_importer.authenticate()
+
+            # Initialize ListenBrainz importer if enabled
+            listenbrainz_config = self.config.importers.listenbrainz
+            if listenbrainz_config.enabled:
+                listenbrainz_importer_config = {
+                    'user_token': listenbrainz_config.user_token,
+                    'username': listenbrainz_config.username
+                }
+                self.listenbrainz_importer = ListenBrainzImporter(listenbrainz_importer_config)
+                await self.listenbrainz_importer.authenticate()
+
             # Initialize Plex handler
             plex_config = self.config.plex
             self.plex_handler = PlexHandler(
@@ -368,6 +394,24 @@ class PeriodeecApplication:
             self.logger.error(f"Plex validation failed: {plex_result.message}")
             validation_results.append(False)
         
+        # Validate Last.fm if enabled
+        if self.lastfm_importer:
+            if await self.lastfm_importer.validate_connection():
+                self.logger.info("Last.fm connection validated")
+                validation_results.append(True)
+            else:
+                self.logger.error("Last.fm connection validation failed")
+                validation_results.append(False)
+
+        # Validate ListenBrainz if enabled
+        if self.listenbrainz_importer:
+            if await self.listenbrainz_importer.validate_connection():
+                self.logger.info("ListenBrainz connection validated")
+                validation_results.append(True)
+            else:
+                self.logger.error("ListenBrainz connection validation failed")
+                validation_results.append(False)
+
         # Validate Beets
         beets_result = self.beets_handler.validate_library()
         if beets_result.success:
@@ -376,7 +420,7 @@ class PeriodeecApplication:
         else:
             self.logger.error(f"Beets validation failed: {beets_result.message}")
             validation_results.append(False)
-        
+
         return all(validation_results)
     
     async def sync_playlist(self, playlist_config, playlist_name: str, original_title: str = None) -> bool:
@@ -683,12 +727,24 @@ class PeriodeecApplication:
                 self.logger.warning(f"Plex connection health check failed: {plex_result.message}")
                 self.stats.record_error('health_check_plex')
             
+            # Check Last.fm connection if enabled
+            if self.lastfm_importer:
+                if not await self.lastfm_importer.validate_connection():
+                    self.logger.warning("Last.fm connection health check failed")
+                    self.stats.record_error('health_check_lastfm')
+
+            # Check ListenBrainz connection if enabled
+            if self.listenbrainz_importer:
+                if not await self.listenbrainz_importer.validate_connection():
+                    self.logger.warning("ListenBrainz connection health check failed")
+                    self.stats.record_error('health_check_listenbrainz')
+
             # Check Beets library
             beets_result = self.beets_handler.validate_library()
             if not beets_result.success:
                 self.logger.warning(f"Beets library health check failed: {beets_result.message}")
                 self.stats.record_error('health_check_beets')
-            
+
             self.logger.info("Health check completed")
             
         except Exception as e:
