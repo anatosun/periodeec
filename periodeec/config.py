@@ -689,8 +689,13 @@ class Config:
                 issues.append(f"Collection '{name}' missing URL")
         
         for name, user in self.users.items():
-            if not user.spotify_username:
-                issues.append(f"User '{name}' missing spotify_username")
+            # Check if user has either legacy spotify_username or new service_connections
+            has_spotify = (
+                user.spotify_username or
+                user.service_connections.spotify_username
+            )
+            if not has_spotify:
+                issues.append(f"User '{name}' missing spotify connection (spotify_username or service_connections.spotify_username)")
         
         return issues
     

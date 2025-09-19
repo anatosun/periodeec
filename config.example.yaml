@@ -6,27 +6,26 @@ settings:
   beets:
     library: /app/music/library.blb
     directory: /app/music
-    config_path: /config/beets.yaml
-    autotag:
-      strong_rec_thresh: 0.04
-      medium_rec_thresh: 0.25
-    duplicate_action: skip # skip, replace, merge
+    plugins: ["spotify", "plexupdate"]
+    fuzzy: false
+    auto_import: true
+    strong_rec_thresh: 0.15
+    timid: false
+    duplicate_action: skip # skip, keep, remove
 
   # Directory structure
   downloads: /app/downloads
   failed: /app/failed
-  temp: /app/temp
   playlists: /app/playlists
 
   # Plex Media Server
   plex:
-    baseurl: http://plex-server
-    port: 32400
+    baseurl: http://plex-server:32400
     token: YOUR_PLEX_TOKEN
     section: Music
-    create_collections: true
-    create_playlists: true
-    admin_user: admin@example.com
+    verify_ssl: true
+    timeout: 30
+    retry_attempts: 3
 
   # Logging configuration
   logging:
