@@ -322,16 +322,31 @@ class BeetsHandler:
                     f"Attempting to autotag '{path}' with search_id '{search_id}'")
                 config["import"]["search_ids"] = [search_id]
 
+                logger.debug(f"Creating import session for path: {path}")
+                logger.debug(f"Path exists: {os.path.exists(path)}")
+                logger.debug(f"Path is directory: {os.path.isdir(path)}")
+
                 session = self.AutoImportSession(
                     lib=self.lib,
                     path=path
                 )
                 session.run()
                 success = session.success
+
+                if not success:
+                    error_msg = getattr(session, 'msg', 'Unknown import failure')
+                    logger.error(f"Beets import session failed: {error_msg}")
+
                 if hasattr(session, 'task') and session.task:
-                    imported = session.task.imported_items()
+                    try:
+                        imported = session.task.imported_items()
+                    except Exception as task_e:
+                        logger.error(f"Failed to get imported items: {task_e}")
+                        imported = []
             except Exception as e:
-                logger.error(f"Beets import failed: {e}")
+                error_msg = str(e) if str(e) else f"Unknown exception: {type(e).__name__}"
+                logger.error(f"Beets import failed: {error_msg}")
+                logger.exception("Full exception details:")
                 success = False
 
         if self.fuzzy and not success:
@@ -344,16 +359,31 @@ class BeetsHandler:
                     f"Attempting to autotag '{path}' without search_id")
                 config["import"]["search_ids"] = []
 
+                logger.debug(f"Creating import session for path: {path}")
+                logger.debug(f"Path exists: {os.path.exists(path)}")
+                logger.debug(f"Path is directory: {os.path.isdir(path)}")
+
                 session = self.AutoImportSession(
                     lib=self.lib,
                     path=path
                 )
                 session.run()
                 success = session.success
+
+                if not success:
+                    error_msg = getattr(session, 'msg', 'Unknown import failure')
+                    logger.error(f"Beets import session failed: {error_msg}")
+
                 if hasattr(session, 'task') and session.task:
-                    imported = session.task.imported_items()
+                    try:
+                        imported = session.task.imported_items()
+                    except Exception as task_e:
+                        logger.error(f"Failed to get imported items: {task_e}")
+                        imported = []
             except Exception as e:
-                logger.error(f"Beets import failed: {e}")
+                error_msg = str(e) if str(e) else f"Unknown exception: {type(e).__name__}"
+                logger.error(f"Beets import failed: {error_msg}")
+                logger.exception("Full exception details:")
                 success = False
 
         if success:
