@@ -83,14 +83,22 @@ class BeetsHandler:
             else:
                 logger.error("No strong match for item, skipping.")
                 self.msg = f"Beets could not find strong match among {len(task.candidates)} candidates"
+                # Ensure task.match is cleared when skipping to avoid chosen_info() errors
+                task.match = None
                 return action.SKIP
 
         def resolve_duplicate(self, task: ImportTask, found_duplicates):
-            self.match = task.candidates[0]
             self.task = task
             logger.error(
                 f"Beets found {len(found_duplicates)} duplicate items in library for path '{self.paths[0]}'")
-            return action.SKIP
+            # For beets 2.4.0+ compatibility, set the choice to skip duplicates
+            try:
+                # Don't set a match for duplicates since we're skipping them
+                task.set_choice(None)
+                return action.SKIP
+            except AttributeError:
+                # Fallback for older beets versions - return the action directly
+                return action.SKIP
 
         def choose_item(self, task):
             self.task = task
@@ -109,6 +117,8 @@ class BeetsHandler:
             else:
                 logger.error("No strong match for item, skipping.")
                 self.msg = f"Beets could not find strong match among {len(task.candidates)} candidates"
+                # Ensure task.match is cleared when skipping to avoid chosen_info() errors
+                task.match = None
                 return action.SKIP
 
     def __init__(self, library: str, directory: str, failed_path: str = "./failed",
