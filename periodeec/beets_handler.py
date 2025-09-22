@@ -73,7 +73,13 @@ class BeetsHandler:
                 logger.info(f"Found strong match: {self.prettify(self.match)}")
                 self.success = True
                 self.msg = f"Beets found strong match among {len(task.candidates)} candidates"
-                return self.match
+                # For beets 2.4.0+ compatibility, set the choice and return action
+                try:
+                    task.set_choice(self.match)
+                    return action.APPLY
+                except AttributeError:
+                    # Fallback for older beets versions
+                    return self.match
             else:
                 logger.error("No strong match for item, skipping.")
                 self.msg = f"Beets could not find strong match among {len(task.candidates)} candidates"
@@ -93,7 +99,13 @@ class BeetsHandler:
                 logger.info(f"Found strong match: {self.prettify(self.match)}")
                 self.success = True
                 self.msg = f"Beets found strong match among {len(task.candidates)} candidates"
-                return self.match
+                # For beets 2.4.0+ compatibility, set the choice and return action
+                try:
+                    task.set_choice(self.match)
+                    return action.APPLY
+                except AttributeError:
+                    # Fallback for older beets versions
+                    return self.match
             else:
                 logger.error("No strong match for item, skipping.")
                 self.msg = f"Beets could not find strong match among {len(task.candidates)} candidates"
