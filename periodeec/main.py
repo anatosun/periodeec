@@ -317,7 +317,6 @@ class PeriodeecApplication:
             spotify_importer_config = {
                 'client_id': spotify_config.client_id,
                 'client_secret': spotify_config.client_secret,
-                'anonymous': spotify_config.anonymous,
                 'cache_enabled': spotify_config.cache_enabled,
                 'cache_ttl_hours': spotify_config.cache_ttl_hours,
                 'rate_limit_rpm': int(spotify_config.rate_limit_rpm * self.config.advanced.rate_limit_buffer),

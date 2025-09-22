@@ -136,7 +136,6 @@ class SpotifyImporter(MusicServiceImporter):
         # Spotify-specific configuration
         self.client_id = config.get('client_id', '')
         self.client_secret = config.get('client_secret', '')
-        self.anonymous = config.get('anonymous', False)
         self.cache_enabled = config.get('cache_enabled', True)
         self.cache_ttl_hours = config.get('cache_ttl_hours', 24)
         self.retry_attempts = config.get('retry_attempts', 3)
@@ -169,32 +168,24 @@ class SpotifyImporter(MusicServiceImporter):
     def _initialize_spotify_client(self) -> spotipy.Spotify:
         """Initialize the Spotify client."""
         try:
-            if self.anonymous:
-                # Anonymous mode (if spotipy_anon is available)
-                try:
-                    import spotipy_anon
-                    return spotipy_anon.Spotify()
-                except ImportError:
-                    raise ImporterError("spotipy_anon not available for anonymous mode")
-            else:
-                # Client credentials flow
-                if not self.client_id or not self.client_secret:
-                    raise ImporterError("Spotify client_id and client_secret are required")
+            # Client credentials flow
+            if not self.client_id or not self.client_secret:
+                raise ImporterError("Spotify client_id and client_secret are required")
 
-                # Use a writable cache directory for spotipy's token cache
-                cache_dir = ".cache/spotify"
-                os.makedirs(cache_dir, exist_ok=True)
-                cache_handler = CacheFileHandler(cache_path=os.path.join(cache_dir, "token_cache"))
-                auth_manager = SpotifyClientCredentials(
-                    client_id=self.client_id,
-                    client_secret=self.client_secret,
-                    cache_handler=cache_handler
-                )
-                return spotipy.Spotify(
-                    auth_manager=auth_manager,
-                    requests_timeout=self.request_timeout,
-                    retries=self.retry_attempts
-                )
+            # Use a writable cache directory for spotipy's token cache
+            cache_dir = ".cache/spotify"
+            os.makedirs(cache_dir, exist_ok=True)
+            cache_handler = CacheFileHandler(cache_path=os.path.join(cache_dir, "token_cache"))
+            auth_manager = SpotifyClientCredentials(
+                client_id=self.client_id,
+                client_secret=self.client_secret,
+                cache_handler=cache_handler
+            )
+            return spotipy.Spotify(
+                auth_manager=auth_manager,
+                requests_timeout=self.request_timeout,
+                retries=self.retry_attempts
+            )
 
         except Exception as e:
             raise ImporterError(f"Failed to initialize Spotify client: {e}")

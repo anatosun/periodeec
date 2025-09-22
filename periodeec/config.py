@@ -14,7 +14,6 @@ class SpotifyConfig:
     enabled: bool = True
     client_id: str = ""
     client_secret: str = ""
-    anonymous: bool = False
     cache_enabled: bool = True
     cache_ttl_hours: int = 24
     rate_limit_rpm: int = 100
@@ -384,6 +383,8 @@ class Config:
         """Load multi-service importers configuration."""
         # Load Spotify configuration
         spotify_config = config.get('spotify', {})
+        # Remove legacy 'anonymous' field if present for backward compatibility
+        spotify_config = {k: v for k, v in spotify_config.items() if k != 'anonymous'}
         self.importers.spotify = SpotifyConfig(**spotify_config)
 
         # Load Last.FM configuration
@@ -472,7 +473,6 @@ class Config:
             'spotify': {
                 'client_id': '',
                 'client_secret': '',
-                'anonymous': True,
                 'cache_enabled': True,
                 'cache_ttl_hours': 24,
                 'rate_limit_rpm': 100
@@ -576,11 +576,11 @@ class Config:
             issues.append("Plex token is required")
         
         # Validate importer configurations
-        if self.importers.spotify.enabled and not self.importers.spotify.anonymous:
+        if self.importers.spotify.enabled:
             if not self.importers.spotify.client_id:
-                issues.append("Spotify client_id is required when not using anonymous mode")
+                issues.append("Spotify client_id is required")
             if not self.importers.spotify.client_secret:
-                issues.append("Spotify client_secret is required when not using anonymous mode")
+                issues.append("Spotify client_secret is required")
 
         if self.importers.lastfm.enabled:
             if not self.importers.lastfm.api_key:
@@ -685,7 +685,6 @@ class Config:
                     'spotify': {
                         'client_id': self.importers.spotify.client_id,
                         'client_secret': self.importers.spotify.client_secret,
-                        'anonymous': self.importers.spotify.anonymous,
                         'cache_enabled': self.importers.spotify.cache_enabled,
                         'cache_ttl_hours': self.importers.spotify.cache_ttl_hours,
                         'rate_limit_rpm': self.importers.spotify.rate_limit_rpm,
@@ -804,7 +803,7 @@ class Config:
         """Print a summary of the current configuration."""
         print("\n=== Configuration Summary ===")
         print(f"Config file: {self.config_path}")
-        print(f"Spotify: {'Anonymous' if self.importers.spotify.anonymous else 'Authenticated'}")
+        print(f"Spotify: Authenticated")
         print(f"Plex: {self.plex.baseurl} (section: {self.plex.section})")
         print(f"Beets library: {self.beets.library}")
         print(f"Music directory: {self.beets.directory}")
@@ -869,8 +868,6 @@ def create_example_config(output_path: str = "config/example-config.yaml"):
             '# Spotify API credentials (get from https://developer.spotify.com)': None,
             'client_id': 'your_spotify_client_id',
             'client_secret': 'your_spotify_client_secret',
-            '# Use anonymous mode (requires spotipy_anon package)': None,
-            'anonymous': False,
             '# Cache settings': None,
             'cache_enabled': True,
             'cache_ttl_hours': 24,
