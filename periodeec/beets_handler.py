@@ -403,3 +403,51 @@ class BeetsHandler:
         except Exception as e:
             logger.error(f"Error getting library stats: {e}")
             return {'error': str(e), 'total_tracks': 0, 'total_albums': 0}
+
+    def validate_library(self) -> bool:
+        """Validate library integrity and accessibility."""
+        try:
+            # Get proper paths (handle bytes/string encoding)
+            library_path = self.lib.path
+            if isinstance(library_path, bytes):
+                library_path = os.fsdecode(library_path)
+
+            directory_path = self.lib.directory
+            if isinstance(directory_path, bytes):
+                directory_path = os.fsdecode(directory_path)
+
+            # Check library file
+            if not os.path.exists(os.path.abspath(library_path)):
+                logger.error(f"Library database not found: {library_path}")
+                return False
+
+            # Check directory
+            if not os.path.exists(directory_path):
+                logger.error(f"Music directory not found: {directory_path}")
+                return False
+
+            # Test library access
+            try:
+                # Try to access the library
+                list(self.lib.items())
+                list(self.lib.albums())
+            except Exception as e:
+                logger.error(f"Cannot access library database: {e}")
+                return False
+
+            # Check write permissions
+            try:
+                test_file = os.path.join(directory_path, '.beets_test')
+                with open(test_file, 'w') as f:
+                    f.write('test')
+                os.remove(test_file)
+            except Exception as e:
+                logger.error(f"No write permission to music directory: {e}")
+                return False
+
+            logger.info("Library validation successful")
+            return True
+
+        except Exception as e:
+            logger.error(f"Library validation failed: {e}")
+            return False
