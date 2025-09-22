@@ -307,7 +307,7 @@ class BeetsHandler:
             logger.error(f"Failed to move {path} to failed directory: {e}")
             return False
 
-    def add(self, path: str, search_id="") -> bool:
+    def add(self, path: str, search_id="") -> ImportResult:
         """Use a custom non-interactive import session."""
 
         success = False
@@ -409,7 +409,10 @@ class BeetsHandler:
         if not success and os.path.exists(path):
             self._move_to_failed(path)
 
-        return success
+        if success:
+            return ImportResult(True, f"Successfully imported to Beets library")
+        else:
+            return ImportResult(False, "Import failed - see logs for details")
 
     def get_library_stats(self):
         """Get library statistics."""
