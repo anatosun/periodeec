@@ -228,7 +228,7 @@ class BeetsHandler:
             results.append(item.get("path", with_album=False))
         return results
 
-    def exists(self, isrc: str, artist: str = "", title: str = "") -> tuple[bool, str]:
+    def exists(self, isrc: str, artist: str = "", title: str = "", album: str = "") -> tuple[bool, str]:
 
         if isrc != "" and self.cache.get(isrc) is not None:
             path = self.cache[isrc]
@@ -246,15 +246,24 @@ class BeetsHandler:
             return True, path
 
         if self.fuzzy:
+            # Build fuzzy search query with available fields
+            queries = []
+            if artist:
+                queries.append(SubstringQuery("artist", artist))
+            if title:
+                queries.append(SubstringQuery("title", title))
+            if album:
+                queries.append(SubstringQuery("album", album))
 
-            query = AndQuery([
-                SubstringQuery("artist", artist),
-                SubstringQuery("title", title)
-            ])
+            if queries:
+                query = AndQuery(queries)
+            else:
+                logger.info(f"No search terms available for fuzzy matching")
+                return False, ""
 
         else:
             logger.info(
-                f"Could not match track with isrc '{isrc}', artist '{artist}' and title '{title}'")
+                f"Could not match track with isrc '{isrc}', artist '{artist}', title '{title}', album '{album}'")
             return False, ""
 
         paths = self._query(query)
@@ -267,7 +276,7 @@ class BeetsHandler:
             return True, path
 
         logger.info(
-            f"Could not match track with isrc '{isrc}', artist '{artist}' and title '{title}'")
+            f"Could not match track with isrc '{isrc}', artist '{artist}', title '{title}', album '{album}'")
         return False, ""
 
     def _move_to_failed(self, path: str) -> bool:
