@@ -282,7 +282,8 @@ class DownloadManager:
                 
                 if result.success:
                     logger.info(f"Successfully downloaded '{track.title}' using {downloader.name}")
-                    track.path = dl_path  # Update track with download path
+                    # Don't set track.path here - let beets handle path assignment after import
+                    # track.path should only be set after successful beets import via mark_found_in_library()
                     self._save_stats()
                     return result
                 else:
