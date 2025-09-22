@@ -518,3 +518,19 @@ class BeetsHandler:
             error_msg = f"Library validation failed: {e}"
             logger.error(error_msg)
             return ImportResult(False, error_msg)
+
+    def print_stats(self):
+        """Print formatted Beets library statistics."""
+        stats = self.get_library_stats()
+
+        print("\n=== Beets Library Statistics ===")
+        print(f"Total tracks: {stats.get('total_tracks', 'Unknown')}")
+        print(f"Total albums: {stats.get('total_albums', 'Unknown')}")
+        print(f"Total files: {stats.get('total_files', 'Unknown')}")
+        print(f"Library size: {stats.get('total_size_gb', 0):.2f} GB")
+        print(f"Cache entries: {stats.get('cache_entries', 0)}")
+
+        if 'error' in stats:
+            print(f"Error: {stats['error']}")
+
+        print("=" * 33)
