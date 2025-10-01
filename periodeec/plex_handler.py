@@ -188,6 +188,13 @@ class PlexHandler:
             logger.error(error_msg)
             return PlexOperationResult(success=False, message=error_msg)
 
+        # Check if any tracks have valid paths
+        tracks_with_paths = [track for track in playlist.tracks if track.path]
+        if len(tracks_with_paths) < 1:
+            error_msg = f"Failed to create playlist {playlist.title}, no tracks with valid paths"
+            logger.error(error_msg)
+            return PlexOperationResult(success=False, message=error_msg)
+
         m3u_file = self.create_m3u(playlist, username)
 
         try:
