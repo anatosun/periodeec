@@ -268,38 +268,45 @@ class BeetsHandler:
             return True, path
 
         if self.fuzzy:
-            # Build fuzzy search query with available fields
-            queries = []
-            if artist:
-                queries.append(SubstringQuery("artist", artist))
-            if title:
-                queries.append(SubstringQuery("title", title))
-            if album:
-                queries.append(SubstringQuery("album", album))
+            # Try multiple fuzzy matching strategies with progressive fallback
 
-            if queries:
-                query = AndQuery(queries)
-            else:
-                logger.info(f"No search terms available for fuzzy matching")
-                return False, ""
+            # Strategy 1: Artist + Title + Album (most specific)
+            if artist and title and album:
+                query = AndQuery([
+                    SubstringQuery("artist", artist),
+                    SubstringQuery("title", title),
+                    SubstringQuery("album", album)
+                ])
+                paths = self._query(query)
+                if paths:
+                    path = os.fsdecode(paths[0])
+                    logger.info(f"Found fuzzy match (artist+title+album) at '{path}'")
+                    if isrc != "":
+                        self.cache[isrc] = path
+                    return True, path
+
+            # Strategy 2: Artist + Title (common case)
+            if artist and title:
+                query = AndQuery([
+                    SubstringQuery("artist", artist),
+                    SubstringQuery("title", title)
+                ])
+                paths = self._query(query)
+                if paths:
+                    path = os.fsdecode(paths[0])
+                    logger.info(f"Found fuzzy match (artist+title) at '{path}'")
+                    if isrc != "":
+                        self.cache[isrc] = path
+                    return True, path
+
+            logger.info(
+                f"Could not fuzzy match track with artist '{artist}', title '{title}', album '{album}'")
+            return False, ""
 
         else:
             logger.info(
                 f"Could not match track with isrc '{isrc}', artist '{artist}', title '{title}', album '{album}'")
             return False, ""
-
-        paths = self._query(query)
-
-        if paths:
-            path = os.fsdecode(paths[0])
-            logger.info(f"Found fuzzy match at '{path}'")
-            if isrc != "":
-                self.cache[isrc] = path
-            return True, path
-
-        logger.info(
-            f"Could not match track with isrc '{isrc}', artist '{artist}', title '{title}', album '{album}'")
-        return False, ""
 
     def _move_to_failed(self, path: str) -> bool:
         """Move a file or directory to the failed directory."""
