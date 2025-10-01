@@ -1,5 +1,6 @@
 import os
 import logging
+import hashlib
 from plexapi.server import PlexServer
 from plexapi.collection import Collection as PlexCollection
 from plexapi.playlist import Playlist as PlexPlaylist
@@ -60,13 +61,18 @@ class PlexHandler:
 
         return result or "Unknown"
 
+    def hash_username(self, username: str) -> str:
+        """Generate a safe directory name from username using hash (avoids @ and other problematic chars)."""
+        return hashlib.sha256(username.encode('utf-8')).hexdigest()[:16]
+
     def create_m3u(self, playlist: Playlist, username: str) -> str:
         """Creates an M3U file for the given playlist and returns the file path."""
-        username = self.sanitize_filename(username)
+        # Hash username to avoid problematic characters like '@' in paths
+        username_hash = self.hash_username(username)
         title = self.sanitize_filename(playlist.title)
 
-        # Use the configured M3U path from configuration
-        user_m3u_path = os.path.join(self.m3u_path, username)
+        # Use the configured M3U path from configuration with hashed username
+        user_m3u_path = os.path.join(self.m3u_path, username_hash)
         os.makedirs(user_m3u_path, exist_ok=True)
 
         m3u_file_path = os.path.join(user_m3u_path, f"{title}.m3u")
