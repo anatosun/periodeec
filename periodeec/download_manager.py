@@ -1,11 +1,10 @@
 import os
 import shutil
 import logging
-from periodeec.modules.downloader import Downloader
+from periodeec.modules.downloader import Downloader, DownloadResult
 from periodeec.track import Track
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 
 class DownloadManager:
@@ -29,10 +28,8 @@ class DownloadManager:
         Calls the .enqueue() method on downloaders with the given track until it succeeds.
 
         :param track: A track object.
+        :return: Tuple of (success, path)
         """
-        success = False
-        path = ""
-
         for downloader in self.downloaders:
 
             logger.info(
@@ -52,17 +49,27 @@ class DownloadManager:
                     logger.error(
                         f"Failed to move previously downloaded files at {failed_file_path}: {e}")
 
-            success, path = downloader.enqueue(
+            result = downloader.enqueue(
                 path=dl_path,
                 isrc=track.isrc,
                 artist=track.artist,
-                title=track.title
+                title=track.title,
+                album=track.album,
+                release_year=track.release_year
             )
 
-            if success:
-                return success, path
+            if result.success:
+                logger.info(
+                    f"{downloader.name} successfully downloaded {len(result.downloaded_files or [])} file(s)"
+                )
+                return True, result.path
 
-            error_message = f"Downloader {downloader.name} failed for {track.title}\n"
+            # Log detailed error message
+            error_message = (
+                f"Downloader {downloader.name} failed for {track.title}: "
+                f"{result.error_message}\n"
+            )
+            logger.warning(error_message)
 
             with open(os.path.join(self.failed_path, 'errors.log'), 'a') as f:
                 f.write(error_message)
@@ -71,6 +78,6 @@ class DownloadManager:
                 shutil.move(dl_path, failed_file_path)
             except Exception as move_error:
                 logger.error(
-                    f"Failed to move file {path} to {failed_file_path}: {move_error}")
+                    f"Failed to move file {result.path} to {failed_file_path}: {move_error}")
 
-        return success, path
+        return False, ""
