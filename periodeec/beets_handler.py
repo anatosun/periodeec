@@ -8,11 +8,22 @@ from beets.library import Library
 from beets import config
 from beets import plugins
 from beets.autotag import Recommendation
-from beets.importer import ImportSession, action, ImportTask
+from beets.importer import ImportSession, ImportTask
 from beets.dbcore.query import SubstringQuery, AndQuery
 from beetsplug import plexupdate
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+# Handle beets version compatibility for action constants
+try:
+    from beets.importer import action
+except ImportError:
+    # In beets 2.4.0+, action constants were moved due to importer UI overhaul
+    # Define the constants we need for compatibility
+    class action:
+        SKIP = 'skip'
+        APPLY = 'apply'
+        ASIS = 'asis'
 
 
 class BeetsHandler:
@@ -71,7 +82,15 @@ class BeetsHandler:
         config["directory"] = os.path.abspath(directory)
         config["library"] = os.path.abspath(library)
         config["plugins"] = beets_plugins
-        plugins.load_plugins(config["plugins"].as_str_seq())
+
+        # Handle beets version compatibility for plugin loading
+        try:
+            # Beets 2.4.0+ - load_plugins() takes no arguments
+            plugins.load_plugins()
+        except TypeError:
+            # Older beets versions - load_plugins() takes a list
+            plugins.load_plugins(config["plugins"].as_str_seq())
+
         loaded = [p.name for p in plugins.find_plugins()]
         logger.info(f"Loaded Beets plugins: {loaded}")
 
@@ -196,7 +215,7 @@ class BeetsHandler:
         if paths:
             path = os.fsdecode(paths[0])
             logger.info(f"Found perfect match at '{path}'")
-            self.cache['isrc'] = path
+            self.cache[isrc] = path
             return True, path
 
         if self.fuzzy:
@@ -217,7 +236,7 @@ class BeetsHandler:
             path = os.fsdecode(paths[0])
             logger.info(f"Found fuzzy match at '{path}'")
             if isrc != "":
-                self.cache['isrc'] = path
+                self.cache[isrc] = path
             return True, path
 
         logger.info(
@@ -245,7 +264,8 @@ class BeetsHandler:
                 )
                 session.run()
                 success = session.success
-                imported = session.task.imported_items()
+                if hasattr(session, 'task') and session.task:
+                    imported = session.task.imported_items()
             except Exception as e:
                 logger.error(f"Beets import failed: {e}")
                 success = False
@@ -266,7 +286,8 @@ class BeetsHandler:
                 )
                 session.run()
                 success = session.success
-                imported = session.task.imported_items()
+                if hasattr(session, 'task') and session.task:
+                    imported = session.task.imported_items()
             except Exception as e:
                 logger.error(f"Beets import failed: {e}")
                 success = False
